@@ -29,7 +29,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Check project files
+      - name: Verify files
         run: |
           test -f index.html
           test -f native/MainActivity.java
@@ -57,14 +57,253 @@ jobs:
           }
           EOF
 
-      - name: Add Android platform
+      - name: Add Android
         run: |
           npx cap add android
 
-      - name: Install native MainActivity
+      - name: Install MainActivity
         run: |
           mkdir -p android/app/src/main/java/com/shorts/app/v2
           cp native/MainActivity.java android/app/src/main/java/com/shorts/app/v2/MainActivity.java
+
+      - name: Fix Capacitor video Range handling
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("node_modules/@capacitor/android/capacitor/src/main/java/com/getcapacitor/WebViewLocalServer.java")
+
+          source = path.read_text()
+
+          method_start = source.index(
+              "private WebResourceResponse handleLocalRequest("
+          )
+
+          range_start = source.index(
+              "        if (request.getRequestHeaders().get(\"Range\") != null) {",
+              method_start
+          )
+
+          next_block = source.index(
+              "        if (isLocalFile(request.getUrl()) || isErrorUrl(request.getUrl())) {",
+              range_start
+          )
+
+          replacement = r'''        String rangeHeader = request.getRequestHeaders().get("Range");
+
+                  if (rangeHeader != null && isLocalFile(request.getUrl())) {
+                      InputStream rawStream = new LollipopLazyInputStream(handler, request);
+
+                      try {
+                          long totalLength = rawStream.available();
+
+                          java.util.regex.Matcher matcher =
+                              java.util.regex.Pattern.compile("(?i)^bytes=(\\d*)-(\\d*)$")
+                                  .matcher(rangeHeader.trim());
+
+                          if (!matcher.matches() || totalLength <= 0) {
+                              Map<String, String> headers = new HashMap<>();
+                              headers.put("Content-Range", "bytes */" + totalLength);
+                              headers.put("Content-Length", "0");
+
+                              return new WebResourceResponse(
+                                  getMimeType(path, rawStream),
+                                  null,
+                                  416,
+                                  "Range Not Satisfiable",
+                                  headers,
+                                  new java.io.ByteArrayInputStream(new byte[0])
+                              );
+                          }
+
+                          String startText = matcher.group(1);
+                          String endText = matcher.group(2);
+
+                          long start;
+                          long end;
+
+                          if (startText.isEmpty()) {
+                              long suffixLength = Long.parseLong(endText);
+                              start = Math.max(0, totalLength - suffixLength);
+                              end = totalLength - 1;
+                          } else {
+                              start = Long.parseLong(startText);
+                              end = endText.isEmpty()
+                                  ? totalLength - 1
+                                  : Long.parseLong(endText);
+                          }
+
+                          if (start >= totalLength || start < 0 || end < start) {
+                              Map<String, String> headers = new HashMap<>();
+                              headers.put("Content-Range", "bytes */" + totalLength);
+                              headers.put("Content-Length", "0");
+
+                              return new WebResourceResponse(
+                                  getMimeType(path, rawStream),
+                                  null,
+                                  416,
+                                  "Range Not Satisfiable",
+                                  headers,
+                                  new java.io.ByteArrayInputStream(new byte[0])
+                              );
+                          }
+
+                          end = Math.min(end, totalLength - 1);
+
+                          long skipped = 0;
+
+                          while (skipped < start) {
+                              long amount = rawStream.skip(start - skipped);
+
+                              if (amount <= 0) {
+                                  if (rawStream.read() == -1) {
+                                      break;
+                                  }
+                                  amount = 1;
+                              }
+
+                              skipped += amount;
+                          }
+
+                          if (skipped != start) {
+                              throw new IOException("Unable to seek to requested video range");
+                          }
+
+                          final long requestedLength = end - start + 1;
+
+                          InputStream limitedStream = new java.io.FilterInputStream(rawStream) {
+                              private long remaining = requestedLength;
+
+                              @Override
+                              public int read() throws IOException {
+                                  if (remaining <= 0) {
+                                      return -1;
+                                  }
+
+                                  int value = super.read();
+
+                                  if (value != -1) {
+                                      remaining--;
+                                  }
+
+                                  return value;
+                              }
+
+                              @Override
+                              public int read(byte[] buffer, int offset, int length)
+                                      throws IOException {
+                                  if (remaining <= 0) {
+                                      return -1;
+                                  }
+
+                                  int allowed = (int) Math.min((long) length, remaining);
+                                  int count = super.read(buffer, offset, allowed);
+
+                                  if (count > 0) {
+                                      remaining -= count;
+                                  }
+
+                                  return count;
+                              }
+
+                              @Override
+                              public long skip(long amount) throws IOException {
+                                  long skippedBytes = super.skip(
+                                      Math.min(amount, remaining)
+                                  );
+
+                                  remaining -= skippedBytes;
+                                  return skippedBytes;
+                              }
+
+                              @Override
+                              public int available() throws IOException {
+                                  return (int) Math.min(
+                                      (long) super.available(),
+                                      remaining
+                                  );
+                              }
+                          };
+
+                          Map<String, String> headers = new HashMap<>();
+                          headers.put("Accept-Ranges", "bytes");
+                          headers.put(
+                              "Content-Range",
+                              "bytes " + start + "-" + end + "/" + totalLength
+                          );
+                          headers.put("Content-Length", String.valueOf(requestedLength));
+                          headers.put("Cache-Control", "no-cache");
+
+                          return new WebResourceResponse(
+                              getMimeType(path, rawStream),
+                              null,
+                              206,
+                              "Partial Content",
+                              headers,
+                              limitedStream
+                          );
+
+                      } catch (Exception e) {
+                          Logger.error("Video range handling failed", e);
+
+                          Map<String, String> headers = new HashMap<>();
+                          headers.put("Content-Length", "0");
+
+                          return new WebResourceResponse(
+                              "video/mp4",
+                              null,
+                              500,
+                              "Internal Server Error",
+                              headers,
+                              new java.io.ByteArrayInputStream(new byte[0])
+                          );
+                      }
+                  }
+
+                  if (rangeHeader != null) {
+                      InputStream responseStream = new LollipopLazyInputStream(handler, request);
+                      String mimeType = getMimeType(path, responseStream);
+                      Map<String, String> tempResponseHeaders = handler.getResponseHeaders();
+                      int statusCode = 206;
+
+                      try {
+                          int totalRange = responseStream.available();
+                          String[] parts = rangeHeader.split("=");
+                          String[] streamParts = parts[1].split("-");
+                          String fromRange = streamParts[0];
+                          int range = totalRange - 1;
+
+                          if (streamParts.length > 1) {
+                              range = Integer.parseInt(streamParts[1]);
+                          }
+
+                          tempResponseHeaders.put("Accept-Ranges", "bytes");
+                          tempResponseHeaders.put(
+                              "Content-Range",
+                              "bytes " + fromRange + "-" + range + "/" + totalRange
+                          );
+                      } catch (IOException e) {
+                          statusCode = 404;
+                      }
+
+                      return new WebResourceResponse(
+                          mimeType,
+                          handler.getEncoding(),
+                          statusCode,
+                          handler.getReasonPhrase(),
+                          tempResponseHeaders,
+                          responseStream
+                      );
+                  }
+
+          '''
+
+          source = source[:range_start] + replacement + source[next_block:]
+
+          path.write_text(source)
+
+          print("Capacitor video Range handling patched successfully.")
+          PY
 
       - name: Sync Capacitor
         run: |
@@ -79,6 +318,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Shorts-App-APK
+          name: Shorts-App-Fixed-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
