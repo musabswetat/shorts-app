@@ -1,10 +1,12 @@
-<!doctype html>
+
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f0f0f">
 <title>Shorts App</title>
+
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;background:#0f0f0f;color:#fff;font-family:Arial,sans-serif}
@@ -13,7 +15,7 @@ button{font:inherit}
 .welcome-box{width:100%;max-width:340px;padding:28px 20px;display:flex;flex-direction:column;gap:16px;align-items:center;background:#1d1d1d;border:1px solid #333;border-radius:20px}
 .welcome-box p{font-size:14px;line-height:1.8;color:#aaa}
 .select-btn{width:100%;padding:13px;border:0;border-radius:12px;background:#f00;color:white;font-weight:bold}
-#statusMessage{min-height:20px;font-size:12px;color:#ffb4b4}
+#statusMessage{min-height:20px;font-size:12px;color:#ffb4b4;line-height:1.7}
 #homeScreen{position:fixed;inset:0;z-index:5;display:none;flex-direction:column;background:#0f0f0f}
 .home-header{padding:15px 18px;display:flex;justify-content:space-between;align-items:center;background:#121212;border-bottom:1px solid #292929;font-weight:bold}
 .header-action{border:0;background:none;color:#ff4545;font-size:13px}
@@ -45,105 +47,439 @@ button{font:inherit}
 .video-progress-container{position:absolute;inset:auto 0 0;height:3px;z-index:4;background:#ffffff33}
 .video-progress-bar{width:0;height:100%;background:#f00}
 .back-home-btn{position:fixed;top:max(14px,env(safe-area-inset-top));right:14px;z-index:12;padding:9px 15px;border:1px solid #ffffff55;border-radius:20px;background:#000a;color:white;font-size:13px;font-weight:bold}
-.video-error{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:35px;background:#000d;color:white;text-align:center;line-height:1.8;pointer-events:none}
+.video-error{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:25px;background:#000e;color:white;text-align:center;line-height:1.8;z-index:5;overflow-wrap:anywhere}
+.video-error small{display:block;color:#ffb4b4;font-size:11px;margin-top:10px;direction:ltr}
 </style>
 </head>
+
 <body>
-<section id="welcomeScreen"><div class="welcome-box">
-<h2>Shorts App</h2>
-<p>اختر المجلد الذي يحتوي على الفيديوهات. سيحفظ التطبيق اختيارك لفتحه تلقائياً لاحقاً.</p>
-<button class="select-btn" type="button" onclick="triggerFolderSelect()">اختر مجلد الفيديوهات</button>
-<div id="statusMessage"></div>
-</div></section>
+
+<section id="welcomeScreen">
+  <div class="welcome-box">
+    <h2>Shorts App</h2>
+    <p>اختر المجلد الذي يحتوي على الفيديوهات. سيحفظ التطبيق اختيارك لفتحه تلقائياً لاحقاً.</p>
+    <button class="select-btn" type="button" onclick="triggerFolderSelect()">اختر مجلد الفيديوهات</button>
+    <div id="statusMessage"></div>
+  </div>
+</section>
+
 <main id="homeScreen">
-<header class="home-header"><span>مقاطع الفيديو</span><button class="header-action" onclick="triggerFolderSelect()">تغيير المجلد</button></header>
-<section class="shorts-container" id="shortsGrid"></section>
+  <header class="home-header">
+    <span>مقاطع الفيديو</span>
+    <button class="header-action" onclick="triggerFolderSelect()">تغيير المجلد</button>
+  </header>
+  <section class="shorts-container" id="shortsGrid"></section>
 </main>
-<main id="feedContainer"><button class="back-home-btn" onclick="returnToHome()">الرئيسية ✕</button></main>
+
+<main id="feedContainer"></main>
+
 <nav class="bottom-nav" id="bottomNav">
-<button class="nav-item active" onclick="handleNavClick('home',this)"><svg viewBox="0 0 24 24"><path d="M3 10 12 3l9 7v10h-6v-7H9v7H3z"/></svg><span>الرئيسية</span></button>
-<button class="nav-item" onclick="handleNavClick('shuffle',this)"><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M16 21h5v-5M4 4l5 5m3 3 9 9"/></svg><span>عشوائي</span></button>
-<button class="nav-item" onclick="handleNavClick('refresh',this)"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M5 9a7 7 0 0 1 13-3l2 6M4 12l2 6a7 7 0 0 0 12-3"/></svg><span>تحديث</span></button>
+  <button class="nav-item active" onclick="handleNavClick('home',this)">
+    <svg viewBox="0 0 24 24"><path d="M3 10 12 3l9 7v10h-6v-7H9v7H3z"/></svg>
+    <span>الرئيسية</span>
+  </button>
+  <button class="nav-item" onclick="handleNavClick('shuffle',this)">
+    <svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M16 21h5v-5M4 4l5 5m3 3 9 9"/></svg>
+    <span>عشوائي</span>
+  </button>
+  <button class="nav-item" onclick="handleNavClick('refresh',this)">
+    <svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M5 9a7 7 0 0 1 13-3l2 6M4 12l2 6a7 7 0 0 0 12-3"/></svg>
+    <span>تحديث</span>
+  </button>
 </nav>
+
 <script>
 'use strict';
-let displayList=[],currentIndex=-1,feedObserver=null;
-document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{if(window.AndroidBridge)window.AndroidBridge.checkSavedFolder()},250));
-function setStatus(t){const e=document.getElementById('statusMessage');if(e)e.textContent=t||''}
-function triggerFolderSelect(){if(window.AndroidBridge){setStatus('افتح نافذة اختيار المجلد...');window.AndroidBridge.selectFolder()}else setStatus('هذه الميزة تعمل داخل تطبيق أندرويد.')}
+
+let displayList=[];
+let currentIndex=-1;
+let feedObserver=null;
+
+document.addEventListener('DOMContentLoaded',()=>{
+  setTimeout(()=>{
+    if(window.AndroidBridge){
+      window.AndroidBridge.checkSavedFolder();
+    }
+  },400);
+});
+
+function setStatus(message){
+  const element=document.getElementById('statusMessage');
+  if(element) element.textContent=message||'';
+}
+
+function triggerFolderSelect(){
+  if(window.AndroidBridge){
+    setStatus('جارٍ فتح اختيار المجلد...');
+    window.AndroidBridge.selectFolder();
+  }else{
+    setStatus('هذه الميزة تعمل داخل تطبيق أندرويد.');
+  }
+}
+
+/* تحويل مسار الملف الحقيقي إلى عنوان يستطيع WebView فتحه */
 function getSafeVideoUrl(path){
- if(!path)return '';
- let uri=String(path);
- if(!uri.startsWith('file://'))uri='file://'+(uri.startsWith('/')?'':'/')+uri;
- return window.Capacitor&&typeof window.Capacitor.convertFileSrc==='function'?window.Capacitor.convertFileSrc(uri):uri;
+  if(!path) return '';
+
+  let uri=String(path).trim();
+
+  if(/^https?:\/\//i.test(uri)) return uri;
+
+  if(uri.startsWith('file://')){
+    // المسار جاهز
+  }else if(uri.startsWith('/')){
+    uri='file://'+uri;
+  }else{
+    uri='file:///'+uri;
+  }
+
+  if(window.Capacitor &&
+     typeof window.Capacitor.convertFileSrc==='function'){
+    return window.Capacitor.convertFileSrc(uri);
+  }
+
+  console.error('Capacitor.convertFileSrc is unavailable',uri);
+  return '';
 }
+
+function videoErrorText(video){
+  const code=video.error ? video.error.code : 0;
+  const messages={
+    1:'تم إيقاف تحميل الفيديو.',
+    2:'حدث خطأ أثناء قراءة ملف الفيديو.',
+    3:'تعذر فك ترميز الفيديو.',
+    4:'المتصفح لا يتعرف على مصدر الفيديو.'
+  };
+
+  return (messages[code]||'خطأ غير معروف في تشغيل الفيديو.')+
+    '\nرمز الخطأ: '+code;
+}
+
+function attachVideo(video,path,errorBox){
+  const url=getSafeVideoUrl(path);
+
+  if(!url){
+    errorBox.style.display='flex';
+    errorBox.textContent='تعذر تحويل مسار الفيديو. تحقق من نسخة التطبيق.';
+    return;
+  }
+
+  video.addEventListener('error',()=>{
+    errorBox.style.display='flex';
+    errorBox.textContent=videoErrorText(video);
+
+    const details=document.createElement('small');
+    details.textContent='SRC: '+(video.currentSrc||url);
+    errorBox.appendChild(details);
+
+    console.error('Video playback error',{
+      path:path,
+      url:url,
+      code:video.error ? video.error.code : null,
+      message:video.error ? video.error.message : null,
+      networkState:video.networkState,
+      readyState:video.readyState
+    });
+  });
+
+  video.addEventListener('loadeddata',()=>{
+    errorBox.style.display='none';
+  });
+
+  video.src=url;
+  video.load();
+}
+
 window.onFolderSelected=function(videos){
- if(!Array.isArray(videos)||!videos.length){setStatus('لم نعثر على فيديوهات في هذا المجلد.');return}
- displayList=videos;document.getElementById('welcomeScreen').style.display='none';
- document.getElementById('homeScreen').style.display='flex';document.getElementById('feedContainer').style.display='none';
- document.getElementById('bottomNav').style.display='flex';renderHomeGrid();
+  if(!Array.isArray(videos)||!videos.length){
+    setStatus('لم نعثر على فيديوهات في هذا المجلد.');
+    return;
+  }
+
+  displayList=videos;
+  setStatus('');
+
+  document.getElementById('welcomeScreen').style.display='none';
+  document.getElementById('homeScreen').style.display='flex';
+  document.getElementById('feedContainer').style.display='none';
+  document.getElementById('bottomNav').style.display='flex';
+
+  renderHomeGrid();
 };
-window.onFolderError=function(message){setStatus(message||'تعذر قراءة المجلد. اختره مرة أخرى.')};
-function channelName(name){return String(name||'').replace(/\.[^.]+$/,'').split('_')[0]||'قناة'}
+
+window.onFolderError=function(message){
+  setStatus(message||'تعذر قراءة المجلد. اختره مرة أخرى.');
+};
+
+function channelName(name){
+  return String(name||'').replace(/\.[^.]+$/,'').split('_')[0]||'قناة';
+}
+
 function renderHomeGrid(){
- const grid=document.getElementById('shortsGrid');grid.replaceChildren();
- if(!displayList.length){const e=document.createElement('div');e.className='empty-state';e.textContent='لا توجد فيديوهات في المجلد المحدد.';grid.append(e);return}
- displayList.forEach((item,index)=>{
-  const card=document.createElement('article');card.className='short-card';card.onclick=()=>openPlayer(index);
-  const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='metadata';v.src=getSafeVideoUrl(item.path);
-  const label=document.createElement('div');label.className='card-overlay';label.textContent='@'+channelName(item.name);
-  card.append(v,label);grid.append(card);
- });
+  const grid=document.getElementById('shortsGrid');
+  grid.replaceChildren();
+
+  if(!displayList.length){
+    const e=document.createElement('div');
+    e.className='empty-state';
+    e.textContent='لا توجد فيديوهات في المجلد المحدد.';
+    grid.append(e);
+    return;
+  }
+
+  displayList.forEach((item,index)=>{
+    const card=document.createElement('article');
+    card.className='short-card';
+    card.onclick=()=>openPlayer(index);
+
+    const video=document.createElement('video');
+    video.muted=true;
+    video.playsInline=true;
+    video.preload='metadata';
+
+    const error=document.createElement('div');
+    error.className='video-error';
+
+    attachVideo(video,item.path,error);
+
+    const label=document.createElement('div');
+    label.className='card-overlay';
+    label.textContent='@'+channelName(item.name);
+
+    card.append(video,label,error);
+    grid.append(card);
+  });
 }
+
 function createPlayerItem(item,index){
- const section=document.createElement('section');section.className='short-item';section.dataset.index=String(index);
- const video=document.createElement('video');video.loop=true;video.playsInline=true;video.preload='metadata';video.setAttribute('webkit-playsinline','');video.src=getSafeVideoUrl(item.path);
- video.onclick=()=>togglePlay(video);video.ontimeupdate=()=>updateProgress(video,index);
- const error=document.createElement('div');error.className='video-error';error.textContent='تعذر تشغيل هذا الفيديو. قد تكون صيغة الفيديو أو ترميزه غير مدعوم على هذا الجهاز.';
- video.onerror=()=>error.style.display='flex';
- const sidebar=document.createElement('div');sidebar.className='sidebar';
- const group=document.createElement('div');group.className='action-group';
- const like=document.createElement('button');like.className='glass-btn';like.type='button';like.innerHTML='<svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1 7.8 7.7 7.8-7.7 1.1-1.1a5.5 5.5 0 0 0-.1-7.8z"/></svg>';
- like.onclick=e=>{e.stopPropagation();like.classList.toggle('liked')};
- const count=document.createElement('span');count.className='action-text';count.textContent='♡';group.append(like,count);sidebar.append(group);
- const info=document.createElement('div');info.className='info';const row=document.createElement('div');row.className='channel-row';
- const name=channelName(item.name),avatar=document.createElement('div');avatar.className='avatar';avatar.textContent=name.charAt(0).toUpperCase();
- const label=document.createElement('span');label.className='channel-name';label.textContent='@'+name;
- const sub=document.createElement('button');sub.className='subscribe-btn';sub.textContent='اشتراك';sub.onclick=e=>{e.stopPropagation();sub.textContent=sub.textContent==='اشتراك'?'مشترك':'اشتراك'};
- row.append(avatar,label,sub);info.append(row);
- const pc=document.createElement('div');pc.className='video-progress-container';const bar=document.createElement('div');bar.className='video-progress-bar';bar.id='progress_'+index;pc.append(bar);
- section.append(video,error,sidebar,info,pc);return section;
+  const section=document.createElement('section');
+  section.className='short-item';
+  section.dataset.index=String(index);
+
+  const video=document.createElement('video');
+  video.loop=true;
+  video.playsInline=true;
+  video.preload='none';
+  video.setAttribute('webkit-playsinline','');
+  video.onclick=()=>togglePlay(video);
+
+  video.ontimeupdate=()=>updateProgress(video,index);
+
+  const error=document.createElement('div');
+  error.className='video-error';
+
+  attachVideo(video,item.path,error);
+
+  const sidebar=document.createElement('div');
+  sidebar.className='sidebar';
+
+  const group=document.createElement('div');
+  group.className='action-group';
+
+  const like=document.createElement('button');
+  like.className='glass-btn';
+  like.type='button';
+  like.innerHTML='<svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1 7.8 7.7 7.8-7.7 1.1-1.1a5.5 5.5 0 0 0-.1-7.8z"/></svg>';
+
+  like.onclick=e=>{
+    e.stopPropagation();
+    like.classList.toggle('liked');
+  };
+
+  const count=document.createElement('span');
+  count.className='action-text';
+  count.textContent='♡';
+
+  group.append(like,count);
+  sidebar.append(group);
+
+  const info=document.createElement('div');
+  info.className='info';
+
+  const row=document.createElement('div');
+  row.className='channel-row';
+
+  const name=channelName(item.name);
+
+  const avatar=document.createElement('div');
+  avatar.className='avatar';
+  avatar.textContent=name.charAt(0).toUpperCase();
+
+  const label=document.createElement('span');
+  label.className='channel-name';
+  label.textContent='@'+name;
+
+  const sub=document.createElement('button');
+  sub.className='subscribe-btn';
+  sub.textContent='اشتراك';
+
+  sub.onclick=e=>{
+    e.stopPropagation();
+    sub.textContent=sub.textContent==='اشتراك'?'مشترك':'اشتراك';
+  };
+
+  row.append(avatar,label,sub);
+  info.append(row);
+
+  const progressContainer=document.createElement('div');
+  progressContainer.className='video-progress-container';
+
+  const bar=document.createElement('div');
+  bar.className='video-progress-bar';
+  bar.id='progress_'+index;
+
+  progressContainer.append(bar);
+
+  section.append(video,error,sidebar,info,progressContainer);
+  return section;
 }
+
 function openPlayer(index){
- const feed=document.getElementById('feedContainer');if(feedObserver){feedObserver.disconnect();feedObserver=null}
- feed.replaceChildren();const back=document.createElement('button');back.className='back-home-btn';back.textContent='الرئيسية ✕';back.onclick=returnToHome;feed.append(back);
- displayList.forEach((item,i)=>feed.append(createPlayerItem(item,i)));
- document.getElementById('homeScreen').style.display='none';document.getElementById('bottomNav').style.display='none';feed.style.display='block';
- setupObserver();currentIndex=index;
- requestAnimationFrame(()=>{const target=feed.querySelector('.short-item[data-index="'+index+'"]');if(target){feed.scrollTop=target.offsetTop;updateBuffer(index)}});
+  const feed=document.getElementById('feedContainer');
+
+  if(feedObserver){
+    feedObserver.disconnect();
+    feedObserver=null;
+  }
+
+  feed.replaceChildren();
+
+  const back=document.createElement('button');
+  back.className='back-home-btn';
+  back.textContent='الرئيسية ✕';
+  back.onclick=returnToHome;
+
+  feed.append(back);
+
+  displayList.forEach((item,i)=>{
+    feed.append(createPlayerItem(item,i));
+  });
+
+  document.getElementById('homeScreen').style.display='none';
+  document.getElementById('bottomNav').style.display='none';
+  feed.style.display='block';
+
+  setupObserver();
+  currentIndex=index;
+
+  requestAnimationFrame(()=>{
+    const target=feed.querySelector('.short-item[data-index="'+index+'"]');
+
+    if(target){
+      feed.scrollTop=target.offsetTop;
+      updateBuffer(index);
+    }
+  });
 }
-function returnToHome(){document.querySelectorAll('#feedContainer video').forEach(v=>v.pause());currentIndex=-1;document.getElementById('feedContainer').style.display='none';document.getElementById('homeScreen').style.display='flex';document.getElementById('bottomNav').style.display='flex'}
+
+function returnToHome(){
+  document.querySelectorAll('#feedContainer video').forEach(video=>{
+    video.pause();
+  });
+
+  if(feedObserver){
+    feedObserver.disconnect();
+    feedObserver=null;
+  }
+
+  currentIndex=-1;
+
+  document.getElementById('feedContainer').style.display='none';
+  document.getElementById('homeScreen').style.display='flex';
+  document.getElementById('bottomNav').style.display='flex';
+}
+
 function updateBuffer(active){
- if(!Number.isInteger(active)||active<0)return;currentIndex=active;
- document.querySelectorAll('.short-item').forEach((item,i)=>{const v=item.querySelector('video');if(!v)return;
-  if(i===active){v.preload='auto';if(v.paused){const p=v.play();if(p&&p.catch)p.catch(e=>console.log('Play failed',e))}}
-  else{v.pause();v.preload=Math.abs(i-active)<=1?'metadata':'none'}
- });
+  if(!Number.isInteger(active)||active<0) return;
+
+  currentIndex=active;
+
+  document.querySelectorAll('.short-item').forEach((item,i)=>{
+    const video=item.querySelector('video');
+    if(!video) return;
+
+    if(i===active){
+      video.preload='auto';
+
+      if(video.paused){
+        const promise=video.play();
+        if(promise&&promise.catch){
+          promise.catch(error=>console.log('Play failed',error));
+        }
+      }
+    }else{
+      video.pause();
+      video.preload=Math.abs(i-active)<=1?'metadata':'none';
+    }
+  });
 }
-function togglePlay(v){if(v.paused){const p=v.play();if(p&&p.catch)p.catch(console.log)}else v.pause()}
-function updateProgress(v,i){if(!v.duration||!Number.isFinite(v.duration))return;const bar=document.getElementById('progress_'+i);if(bar)bar.style.width=(v.currentTime/v.duration*100)+'%'}
+
+function togglePlay(video){
+  if(video.paused){
+    const promise=video.play();
+    if(promise&&promise.catch) promise.catch(console.log);
+  }else{
+    video.pause();
+  }
+}
+
+function updateProgress(video,index){
+  if(!video.duration||!Number.isFinite(video.duration)) return;
+
+  const bar=document.getElementById('progress_'+index);
+  if(bar){
+    bar.style.width=(video.currentTime/video.duration*100)+'%';
+  }
+}
+
 function setupObserver(){
- const feed=document.getElementById('feedContainer');
- feedObserver=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];if(visible&&visible.intersectionRatio>=.55)updateBuffer(Number(visible.target.dataset.index))},{root:feed,threshold:[.35,.55,.75]});
- feed.querySelectorAll('.short-item').forEach(e=>feedObserver.observe(e));
+  const feed=document.getElementById('feedContainer');
+
+  feedObserver=new IntersectionObserver(entries=>{
+    const visible=entries
+      .filter(e=>e.isIntersecting)
+      .sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
+
+    if(visible&&visible.intersectionRatio>=0.55){
+      updateBuffer(Number(visible.target.dataset.index));
+    }
+  },{
+    root:feed,
+    threshold:[0.35,0.55,0.75]
+  });
+
+  feed.querySelectorAll('.short-item').forEach(item=>{
+    feedObserver.observe(item);
+  });
 }
+
 function handleNavClick(action,button){
- document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));button.classList.add('active');
- if(action==='home')returnToHome();
- if(action==='shuffle'){displayList=[...displayList].sort(()=>Math.random()-.5);renderHomeGrid()}
- if(action==='refresh'&&window.AndroidBridge)window.AndroidBridge.checkSavedFolder();
+  document.querySelectorAll('.nav-item').forEach(item=>{
+    item.classList.remove('active');
+  });
+
+  button.classList.add('active');
+
+  if(action==='home') returnToHome();
+
+  if(action==='shuffle'){
+    displayList=[...displayList].sort(()=>Math.random()-0.5);
+    renderHomeGrid();
+  }
+
+  if(action==='refresh'&&window.AndroidBridge){
+    window.AndroidBridge.checkSavedFolder();
+  }
 }
-window.handleAndroidBack=function(){if(document.getElementById('feedContainer').style.display==='block'){returnToHome();return true}return false};
+
+window.handleAndroidBack=function(){
+  if(document.getElementById('feedContainer').style.display==='block'){
+    returnToHome();
+    return true;
+  }
+
+  return false;
+};
 </script>
 </body>
 </html>
