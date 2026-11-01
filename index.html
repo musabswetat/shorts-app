@@ -21,10 +21,6 @@
             border-radius: 12px; cursor: pointer; font-weight: bold; width: 100%;
         }
 
-        #progressContainer { display: none; width: 100%; background: #333; border-radius: 4px; overflow: hidden; height: 6px; margin-top: 5px; }
-        #progressBarFill { width: 0%; height: 100%; background: #ff0000; transition: width 0.1s linear; }
-        #statusText { font-size: 12px; color: #aaa; margin-top: 5px; }
-
         #homeScreen {
             position: fixed; inset: 0; background: #0f0f0f; display: none; flex-direction: column; z-index: 100;
         }
@@ -96,19 +92,13 @@
         <div class="welcome-box">
             <h2 id="welcomeTitle" style="font-size: 18px; font-weight: bold;">YouTube Shorts</h2>
             <p id="welcomeDesc" style="font-size: 13px; color: #aaa;">اختر مجلد الفيديوهات لبدء التشغيل</p>
-            
             <button class="select-btn" id="selectBtn" onclick="triggerFolderSelect()">اختر المجلد</button>
-
-            <div id="progressContainer">
-                <div id="progressBarFill"></div>
-            </div>
-            <div id="statusText"></div>
         </div>
     </div>
 
     <div id="homeScreen">
         <div class="home-header">
-            <span>Shorts (من المجلد المحفوظ)</span>
+            <span>Shorts (المجلد المحفوظ)</span>
             <span style="font-size: 12px; color: #ff0000; cursor: pointer;" onclick="triggerFolderSelect()">تغيير المجلد</span>
         </div>
         <div class="shorts-container" id="shortsGrid"></div>
@@ -138,22 +128,28 @@
         let currentIndex = 0;
         const PRELOAD_COUNT = 5;
 
+        // بمجرد تحميل الصفحة بالكامل، نطلب من أندرويد فحص المجلد المحفوظ مسبقاً
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                if (window.AndroidBridge && typeof window.AndroidBridge.checkSavedFolder === 'function') {
+                    window.AndroidBridge.checkSavedFolder();
+                }
+            }, 500);
+        });
+
         function triggerFolderSelect() {
             if (window.AndroidBridge && typeof window.AndroidBridge.selectFolder === 'function') {
                 window.AndroidBridge.selectFolder();
             } else {
-                alert('هذه الميزة تعمل داخل تطبيق أندرويد المثبت.');
+                alert('هذه الميزة تعمل داخل تطبيق أندرويد.');
             }
         }
 
         window.onFolderSelected = function(videos) {
             if (!videos || videos.length === 0) {
-                alert('لم يتم العثور على فيديوهات داخل هذا المجلد!');
                 return;
             }
-
             displayList = videos;
-
             document.getElementById('welcomeScreen').style.display = 'none';
             document.getElementById('homeScreen').style.display = 'flex';
             renderHomeGrid();
