@@ -47,25 +47,25 @@ jobs:
               > capacitor.config.json
           fi
 
-      - name: Prepare Android & Inject Native Folder Picker
+      - name: Prepare Android & Inject Cached Folder Picker
         run: |
           if [ ! -d android ]; then
             npx cap add android
           fi
 
-          # إضافة مكتبة DocumentFile إلى build.gradle الخاص بأندرويد لتجنب خطأ الترتيب
           GRADLE_PATH="android/app/build.gradle"
           if [ -f "$GRADLE_PATH" ]; then
             sed -i '/dependencies {/a \    implementation "androidx.documentfile:documentfile:1.0.0"' "$GRADLE_PATH"
           fi
 
-          # حقن كود MainActivity.java الخاص باختيار المجلدات
           FOUND_ACTIVITY=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           if [ -f "$FOUND_ACTIVITY" ]; then
             cat << 'JAVA_EOF' > "$FOUND_ACTIVITY"
           package com.shorts.app.v2;
 
+          import android.content.Context;
           import android.content.Intent;
+          import android.content.SharedPreferences;
           import android.net.Uri;
           import android.os.Bundle;
           import android.webkit.JavascriptInterface;
@@ -75,9 +75,14 @@ jobs:
           import com.getcapacitor.BridgeActivity;
           import org.json.JSONArray;
           import org.json.JSONObject;
+          import java.io.File;
+          import java.io.FileOutputStream;
+          import java.io.InputStream;
 
           public class MainActivity extends BridgeActivity {
               private ActivityResultLauncher<Intent> folderPickerLauncher;
+              private static final String PREFS_NAME = "ShortsPrefs";
+              private static final String KEY_FOLDER_URI = "savedFolderUri";
 
               @Override
               public void onCreate(Bundle savedInstanceState) {
@@ -92,14 +97,31 @@ jobs:
                                   getContentResolver().takePersistableUriPermission(treeUri,
                                       Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                                   
-                                  String jsonVideos = getVideosFromTreeUri(treeUri);
-                                  bridge.getWebView().evaluateJavascript("javascript:onFolderSelected(" + jsonVideos + ")", null);
+                                  // حفظ مسار المجلد لتجنب سؤاله مرة أخرى
+                                  SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                                  prefs.edit().putString(KEY_FOLDER_URI, treeUri.toString()).apply();
+
+                                  loadVideosAndNotify(treeUri);
                               }
                           }
                       }
                   );
 
                   bridge.getWebView().addJavascriptInterface(new WebAppInterface(this), "AndroidBridge");
+
+                  // التحقق من وجود مجلد محفوط مسبقاً عند تشغيل التطبيق
+                  getWindow().getDecorView().postDelayed(() -> {
+                      SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                      String savedUriStr = prefs.getString(KEY_FOLDER_URI, null);
+                      if (savedUriStr != null) {
+                          try {
+                              Uri savedUri = Uri.parse(savedUriStr);
+                              loadVideosAndNotify(savedUri);
+                          } catch (Exception e) {
+                              e.printStackTrace();
+                          }
+                      }
+                  }, 1000);
               }
 
               public void openFolderPicker() {
@@ -107,18 +129,41 @@ jobs:
                   folderPickerLauncher.launch(intent);
               }
 
+              private void loadVideosAndNotify(Uri treeUri) {
+                  String jsonVideos = getVideosFromTreeUri(treeUri);
+                  bridge.getWebView().post(() -> {
+                      bridge.getWebView().evaluateJavascript("javascript:onFolderSelected(" + jsonVideos + ")", null);
+                  });
+              }
+
               private String getVideosFromTreeUri(Uri treeUri) {
                   JSONArray jsonArray = new JSONArray();
                   try {
                       DocumentFile pickedDir = DocumentFile.fromTreeUri(this, treeUri);
                       if (pickedDir != null && pickedDir.isDirectory()) {
+                          File cacheDir = new File(getCacheDir(), "video_cache");
+                          if (!cacheDir.exists()) cacheDir.mkdirs();
+
                           for (DocumentFile file : pickedDir.listFiles()) {
                               if (file.isFile() && file.getName() != null) {
                                   String name = file.getName().toLowerCase();
                                   if (name.endsWith(".mp4") || name.endsWith(".mkv") || name.endsWith(".webm") || name.endsWith(".mov")) {
+                                      // نسخ الفيديو للذاكرة المؤقتة لضمان عمله في WebView بدون قيود
+                                      File cachedFile = new File(cacheDir, file.getName());
+                                      try (InputStream in = getContentResolver().openInputStream(file.getUri());
+                                           FileOutputStream out = new FileOutputStream(cachedFile)) {
+                                          byte[] buffer = new byte[8192];
+                                          int read;
+                                          while ((read = in.read(buffer)) != -1) {
+                                              out.write(buffer, 0, read);
+                                          }
+                                      } catch (Exception e) {
+                                          continue;
+                                      }
+
                                       JSONObject obj = new JSONObject();
                                       obj.put("name", file.getName());
-                                      obj.put("path", file.getUri().toString());
+                                      obj.put("path", Uri.fromFile(cachedFile).toString());
                                       jsonArray.put(obj);
                                   }
                               }
@@ -136,7 +181,7 @@ jobs:
 
                   @JavascriptInterface
                   public void selectFolder() {
-                      runOnUiThread(() -> openFolderPicker());
+                      mContext.runOnUiThread(() -> mContext.openFolderPicker());
                   }
               }
           }
