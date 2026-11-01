@@ -128,7 +128,6 @@
         let currentIndex = 0;
         const PRELOAD_COUNT = 5;
 
-        // بمجرد تحميل الصفحة بالكامل، نطلب من أندرويد فحص المجلد المحفوظ مسبقاً
         window.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 if (window.AndroidBridge && typeof window.AndroidBridge.checkSavedFolder === 'function') {
@@ -167,7 +166,7 @@
                 card.className = 'short-card';
                 card.onclick = () => openPlayer(index);
                 card.innerHTML = `
-                    <video src="${item.path}" preload="metadata"></video>
+                    <video src="${item.path}" preload="metadata" muted playsinline></video>
                     <div class="card-overlay">
                         <span>@${channelName}</span>
                     </div>
@@ -205,7 +204,9 @@
                 div.className = 'short-item';
                 div.dataset.index = index;
                 div.innerHTML = `
-                    <video loop playsinline preload="none" onclick="togglePlay(this)" ontimeupdate="updateProgress(this, ${index})"></video>
+                    <video loop playsinline preload="auto" onclick="togglePlay(this)" ontimeupdate="updateProgress(this, ${index})">
+                        <source src="${item.path}" type="video/mp4">
+                    </video>
                     <div class="sidebar">
                         <div class="action-group">
                             <button class="glass-btn" id="likeBtn_${index}" onclick="handleLike(${index})">
@@ -237,16 +238,14 @@
             items.forEach((item, index) => {
                 const video = item.querySelector('video');
                 if (index >= currentIndex - 1 && index <= currentIndex + PRELOAD_COUNT) {
-                    if (!video.src || video.src === window.location.href) {
-                        video.src = displayList[index].path;
-                        video.load();
+                    if (index === currentIndex) {
+                        video.play().catch(e => console.log("Play blocked:", e));
+                    } else {
+                        video.pause();
+                        video.currentTime = 0;
                     }
-                    if (index === currentIndex) video.play().catch(e => {});
-                    else { video.pause(); video.currentTime = 0; }
                 } else {
-                    if (video.src && video.src !== window.location.href) {
-                        video.pause(); video.src = ""; video.load();
-                    }
+                    video.pause();
                 }
             });
         }
