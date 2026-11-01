@@ -192,7 +192,6 @@ jobs:
 
                                       JSONObject obj = new JSONObject();
                                       obj.put("name", file.getName());
-                                      // إرسال المسار المطلق الحقيقي ليتم تحويله بكاباسيتور عبر convertFileSrc
                                       obj.put("path", cachedFile.getAbsolutePath());
                                       jsonArray.put(obj);
                                   }
@@ -210,7 +209,6 @@ jobs:
 
                   @JavascriptInterface
                   public void selectFolder() {
-                      mContext.runOnUiThread(() -> mContext.openFolderPtr = () -> mContext.openFolderPicker());
                       mContext.runOnUiThread(() -> mContext.openFolderPicker());
                   }
 
