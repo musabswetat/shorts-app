@@ -1,4 +1,3 @@
-
 name: Build Android APK
 
 on:
@@ -54,6 +53,84 @@ jobs:
             npx cap add android
           fi
 
+      - name: Inject Auto-Media Bridge into Android
+        run: |
+          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST_PATH" ]; then
+            sed -i '/<uses-permission android:name="android.permission.INTERNET"/a \    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />' "$MANIFEST_PATH"
+          fi
+
+          FOUND_ACTIVITY=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
+          if [ -f "$FOUND_ACTIVITY" ]; then
+            cat << 'JAVA_EOF' > "$FOUND_ACTIVITY"
+          package com.shorts.app.v2;
+
+          import android.Manifest;
+          import android.content.pm.PackageManager;
+          import android.database.Cursor;
+          import android.net.Uri;
+          import android.os.Bundle;
+          import android.provider.MediaStore;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.WebView;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.content.ContextCompat;
+          import com.getcapacitor.BridgeActivity;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+          import java.io.File;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) != PackageManager.PERMISSION_GRANTED &&
+                      ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                      ActivityCompat.requestPermissions(this, new String[]{
+                          Manifest.permission.READ_MEDIA_VIDEO,
+                          Manifest.permission.READ_EXTERNAL_STORAGE
+                      }, 101);
+                  }
+                  this.bridge.getWebView().addJavascriptInterface(new WebAppInterface(this), "AndroidBridge");
+              }
+
+              public class WebAppInterface {
+                  MainActivity mContext;
+                  WebAppInterface(MainActivity c) { mContext = c; }
+
+                  @JavascriptInterface
+                  public String getVideos() {
+                      JSONArray jsonArray = new JSONArray();
+                      try {
+                          Uri uri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
+                          String[] projection = {MediaStore.Video.Media.DATA, MediaStore.Video.Media.DISPLAY_NAME, MediaStore.Video.Media.DATE_ADDED};
+                          Cursor cursor = mContext.getContentResolver().query(uri, projection, null, null, MediaStore.Video.Media.DATE_ADDED + " DESC");
+                          if (cursor != null) {
+                              int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA);
+                              int nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME);
+                              while (cursor.moveToNext() && jsonArray.length() < 30) {
+                                  String filePath = cursor.getString(dataColumn);
+                                  String fileName = cursor.getString(nameColumn);
+                                  File file = new File(filePath);
+                                  if (file.exists()) {
+                                      JSONObject obj = new JSONObject();
+                                      obj.put("name", fileName);
+                                      obj.put("path", Uri.fromFile(file).toString());
+                                      jsonArray.put(obj);
+                                  }
+                              }
+                              cursor.close();
+                          }
+                      } catch (Exception e) {
+                          e.printStackTrace();
+                      }
+                      return jsonArray.toString();
+                  }
+              }
+          }
+          JAVA_EOF
+          fi
+
       - name: Sync Android
         run: npx cap sync android
 
@@ -68,4 +145,3 @@ jobs:
         with:
           name: my-android-app
           path: android/app/build/outputs/apk/debug/app-debug.apk
-
