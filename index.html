@@ -4,17 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube Shorts</title>
+    <link rel="manifest" href='data:application/manifest+json;charset=utf-8,{"name":"YouTube Shorts","short_name":"Shorts","start_url":".","display":"standalone","background_color":"%23000000","theme_color":"%23ff0000","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 width=%22512%22 height=%22512%22%3E%3Crect width=%2224%22 height=%2224%22 rx=%225%22 fill=%22%23ff0000%22/%3E%3Cpolygon points=%229.5,7.5 16.5,12 9.5,16.5%22 fill=%22%23ffffff%22/%3E%3C/svg%3E","sizes":"512x512","type":"image/svg+xml"}]}'>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body, html { width: 100%; height: 100%; background: #0f0f0f; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
         
-        /* شاشة التحميل التلقائي */
-        #loadingScreen {
+        #welcomeScreen {
             position: fixed; inset: 0; background: #0f0f0f;
-            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; gap: 15px; text-align: center;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; gap: 20px; padding: 20px; text-align: center;
+        }
+        .welcome-box {
+            background: #1f1f1f; border: 1px solid #333; border-radius: 20px; padding: 30px 20px; max-width: 320px; width: 100%;
+            display: flex; flex-direction: column; align-items: center; gap: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+        .select-btn {
+            background: #ff0000; color: #fff; border: none; padding: 12px 24px; font-size: 16px;
+            border-radius: 12px; cursor: pointer; font-weight: bold; width: 100%;
         }
 
-        /* الصفحة الرئيسية */
+        #progressContainer { display: none; width: 100%; background: #333; border-radius: 4px; overflow: hidden; height: 6px; margin-top: 5px; }
+        #progressBarFill { width: 0%; height: 100%; background: #ff0000; transition: width 0.1s linear; }
+        #statusText { font-size: 12px; color: #aaa; margin-top: 5px; }
+
         #homeScreen {
             position: fixed; inset: 0; background: #0f0f0f; display: none; flex-direction: column; z-index: 100;
         }
@@ -37,7 +48,6 @@
             background: linear-gradient(transparent, rgba(0,0,0,0.9)); font-size: 14px; font-weight: bold; color: #fff;
         }
 
-        /* مشغل الشورتس بكامل الشاشة */
         .player-container { 
             height: 100vh; overflow-y: scroll; scroll-snap-type: y mandatory; 
             -webkit-overflow-scrolling: touch; scrollbar-width: none; display: none; padding-bottom: 60px; scroll-behavior: smooth;
@@ -83,27 +93,32 @@
 </head>
 <body>
 
-    <!-- شاشة التحميل التلقائي -->
-    <div id="loadingScreen">
-        <h2 style="font-size: 18px;">جاري جلب الفيديوهات تلقائياً...</h2>
-        <p id="loadStatus" style="font-size: 13px; color: #aaa;">يرجى منح صلاحية الوصول للذاكرة إن طلبت منك</p>
+    <div id="welcomeScreen">
+        <div class="welcome-box">
+            <h2 id="welcomeTitle" style="font-size: 18px; font-weight: bold;">YouTube Shorts</h2>
+            <p id="welcomeDesc" style="font-size: 13px; color: #aaa;">اختر مجلد الفيديوهات لبدء التشغيل</p>
+            
+            <button class="select-btn" id="selectBtn" onclick="triggerFolderSelect()">اختر المجلد</button>
+
+            <div id="progressContainer">
+                <div id="progressBarFill"></div>
+            </div>
+            <div id="statusText"></div>
+        </div>
     </div>
 
-    <!-- الصفحة الرئيسية -->
     <div id="homeScreen">
         <div class="home-header">
-            <span>Shorts (الأحدث من هاتفك)</span>
-            <span style="font-size: 12px; color: #ff0000;">تشغيل آلي</span>
+            <span>Shorts (من المجلد المختار)</span>
+            <span style="font-size: 12px; color: #ff0000;">الأحدث أولاً</span>
         </div>
         <div class="shorts-container" id="shortsGrid"></div>
     </div>
 
-    <!-- مشغل الشورتس -->
     <div class="player-container" id="feedContainer">
         <button class="back-home-btn" onclick="returnToHome()">الرئيسية ✕</button>
     </div>
 
-    <!-- شريط التنقل السفلي -->
     <div class="bottom-nav">
         <button class="nav-item active" onclick="handleNavClick(0, 'home')">
             <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -124,34 +139,32 @@
         let currentIndex = 0;
         const PRELOAD_COUNT = 5;
 
-        // استقبال الفيديوهات تلقائياً من تطبيق أندرويد عند الفتح
-        window.addEventListener('DOMContentLoaded', () => {
-            setTimeout(() => {
-                if (window.AndroidBridge && typeof window.AndroidBridge.getVideos === 'function') {
-                    try {
-                        let jsonVideos = window.AndroidBridge.getVideos();
-                        let videos = JSON.parse(jsonVideos);
-                        if (videos && videos.length > 0) {
-                            initApp(videos);
-                            return;
-                        }
-                    } catch(e) { console.log(e); }
-                }
-                // في حال التجربة على المتصفح العادي كاحتياط
-                fallbackDemo();
-            }, 1000);
-        });
+        function triggerFolderSelect() {
+            if (window.AndroidBridge && typeof window.AndroidBridge.selectFolder === 'function') {
+                window.AndroidBridge.selectFolder();
+            } else {
+                alert('هذه الميزة تعمل داخل تطبيق أندرويد المثبت.');
+            }
+        }
 
-        function initApp(videos) {
-            displayList = videos.slice(0, 8); // أخذ أول 8 فيديوهات حديثة
-            document.getElementById('loadingScreen').style.display = 'none';
+        // يستقبل الفيديوهات من المجلد الذي اخترته عبر أندرويد
+        window.onFolderSelected = function(videos) {
+            if (!videos || videos.length === 0) {
+                alert('لم يتم العثور على فيديوهات داخل هذا المجلد!');
+                return;
+            }
+
+            document.getElementById('selectBtn').style.display = 'none';
+            document.getElementById('welcomeDesc').style.display = 'none';
+            document.getElementById('welcomeTitle').innerText = 'جاري التحميل...';
+            document.getElementById('progressContainer').style.display = 'block';
+
+            displayList = videos.slice(0, 8);
+
+            document.getElementById('welcomeScreen').style.display = 'none';
             document.getElementById('homeScreen').style.display = 'flex';
             renderHomeGrid();
-        }
-
-        function fallbackDemo() {
-            document.getElementById('loadStatus.innerText') = 'لم يتم رصد فيديوهات تلقائياً، يرجى التأكد من منح صلاحية التخزين في إعدادات الهاتف.';
-        }
+        };
 
         function renderHomeGrid() {
             const grid = document.getElementById('shortsGrid');
@@ -250,10 +263,7 @@
         }
 
         function togglePlay(v) { v.paused ? v.play() : v.pause(); }
-        function handleLike(i) {
-            const btn = document.getElementById(`likeBtn_${i}`);
-            btn.classList.toggle('liked');
-        }
+        function handleLike(i) { document.getElementById(`likeBtn_${i}`).classList.toggle('liked'); }
         function updateProgress(v, i) {
             if (!v.duration) return;
             document.getElementById(`progress_${i}`).style.width = ((v.currentTime / v.duration) * 100) + '%';
