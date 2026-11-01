@@ -26,50 +26,62 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Prepare Project
+      - name: Prepare Project & Capacitor
         run: |
           mkdir -p public
-
           if [ -f index.html ]; then
-            mv index.html public/
+            cp index.html public/index.html
           fi
 
           if [ ! -f package.json ]; then
-            npm init -y
+            cat << 'EOF' > package.json
+            {
+              "name": "shorts-app-v2",
+              "version": "1.0.0",
+              "private": true,
+              "dependencies": {
+                "@capacitor/core": "^6.0.0",
+                "@capacitor/android": "^6.0.0"
+              },
+              "devDependencies": {
+                "@capacitor/cli": "^6.0.0"
+              }
+            }
+            EOF
           fi
-
-          npm install @capacitor/core@^6 @capacitor/android@^6
-          npm install --save-dev @capacitor/cli@^6
 
           if [ ! -f capacitor.config.json ]; then
-            printf '%s\n' \
-              '{"appId":"com.shorts.app.v2","appName":"Shorts App","webDir":"public"}' \
-              > capacitor.config.json
+            cat << 'EOF' > capacitor.config.json
+            {
+              "appId": "com.shorts.app.v2",
+              "appName": "Shorts App",
+              "webDir": "public"
+            }
+            EOF
           fi
 
-      - name: Prepare Android & Dependencies
+          npm install
+
+      - name: Configure Android Native
         run: |
           if [ ! -d android ]; then
             npx cap add android
           fi
 
-          # إضافة أذونات التخزين والوسائط
+          # إضافة الصلاحيات إلى Manifest
           MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST_PATH" ]; then
             sed -i '/<uses-permission android:name="android.permission.INTERNET"/a \    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />' "$MANIFEST_PATH"
           fi
 
-          # إضافة مكتبة DocumentFile
+          # إضافة مكتبة DocumentFile إلى gradle
           GRADLE_PATH="android/app/build.gradle"
           if [ -f "$GRADLE_PATH" ]; then
             sed -i '/dependencies {/a \    implementation "androidx.documentfile:documentfile:1.0.0"' "$GRADLE_PATH"
           fi
 
-      - name: Create MainActivity Directly
-        run: |
-          # إنشاء المجلدات وإنشاء ملف MainActivity.java يدوياً لضمان عدم فقده أبداً
+          # إنشاء ملف MainActivity.java بشكل مباشر ونظيف
           mkdir -p android/app/src/main/java/com/shorts/app/v2
-          
           cat << 'JAVA_EOF' > android/app/src/main/java/com/shorts/app/v2/MainActivity.java
           package com.shorts.app.v2;
 
@@ -189,7 +201,6 @@ jobs:
                           }
                       }
                   } catch (Exception e) {
-                      e.printStackTrace();
                   }
                   return jsonArray.toString();
               }
@@ -214,7 +225,6 @@ jobs:
                                   Intent.FLAG_GRANT_READ_URI_PERMISSION);
                               mContext.processVideosInBackground(savedUri);
                           } catch (Exception e) {
-                              e.printStackTrace();
                           }
                       }
                   }
@@ -222,10 +232,9 @@ jobs:
           }
           JAVA_EOF
 
-      - name: Sync Android
-        run: npx cap sync android
+          npx cap sync android
 
-      - name: Build APK
+      - name: Build APK with Gradle
         run: |
           cd android
           chmod +x gradlew
