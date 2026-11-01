@@ -1,85 +1,71 @@
+
 name: Build Android APK
 
 on:
-push:
-branches: [main, master]
-workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
 
 jobs:
-build:
-runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
-steps:
-  - name: Checkout Code
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-  - name: Clean Windows node_modules
-    run: rm -rf node_modules package-lock.json
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
-  - name: Setup Node.js
-    uses: actions/setup-node@v4
-    with:
-      node-version: '22'
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
 
-  - name: Prepare Project Structure
-    run: |
-      mkdir -p public
+      - name: Prepare Project
+        run: |
+          mkdir -p public
 
-      if [ -f "index.html" ]; then
-        mv index.html public/
-      fi
+          if [ -f index.html ]; then
+            mv index.html public/
+          fi
 
-      if [ ! -f "package.json" ]; then
-        printf '%s\n' \
-          '{' \
-          '  "name": "shorts-app-v2",' \
-          '  "version": "1.0.0",' \
-          '  "private": true,' \
-          '  "dependencies": {' \
-          '    "@capacitor/core": "^6.0.0",' \
-          '    "@capacitor/android": "^6.0.0"' \
-          '  },' \
-          '  "devDependencies": {' \
-          '    "@capacitor/cli": "^6.0.0"' \
-          '  }' \
-          '}' > package.json
-      fi
+          if [ ! -f package.json ]; then
+            npm init -y
+          fi
 
-      if [ ! -f "capacitor.config.json" ]; then
-        printf '%s\n' \
-          '{' \
-          '  "appId": "com.shorts.app.v2",' \
-          '  "appName": "YouTube Shorts V2",' \
-          '  "webDir": "public"' \
-          '}' > capacitor.config.json
-      fi
+          npm install @capacitor/core@^6 @capacitor/android@^6
+          npm install --save-dev @capacitor/cli@^6
 
-  - name: Setup Java JDK
-    uses: actions/setup-java@v4
-    with:
-      distribution: temurin
-      java-version: '21'
+          if [ ! -f capacitor.config.json ]; then
+            printf '%s\n' \
+              '{"appId":"com.shorts.app.v2","appName":"Shorts App","webDir":"public"}' \
+              > capacitor.config.json
+          fi
 
-  - name: Install npm dependencies
-    run: npm install
+      - name: Prepare Android
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
 
-  - name: Prepare Android Platform
-    run: |
-      if [ ! -d "android" ]; then
-        npx cap add android
-      fi
+      - name: Sync Android
+        run: npx cap sync android
 
-  - name: Sync Capacitor Android
-    run: npx cap sync android
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-  - name: Build APK with Gradle
-    run: |
-      cd android
-      chmod +x gradlew
-      ./gradlew assembleDebug --stacktrace
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-android-app
+          path: android/app/build/outputs/apk/debug/app-debug.apk
 
-  - name: Upload APK
-    uses: actions/upload-artifact@v4
-    with:
-      name: my-android-app-v2
-      path: android/app/build/outputs/apk/debug/app-debug.apk
