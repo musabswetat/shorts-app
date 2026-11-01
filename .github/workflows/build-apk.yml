@@ -34,33 +34,15 @@ jobs:
           fi
 
           if [ ! -f package.json ]; then
-            cat << 'EOF' > package.json
-{
-  "name": "shorts-app-v2",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "@capacitor/core": "^6.0.0",
-    "@capacitor/android": "^6.0.0"
-  },
-  "devDependencies": {
-    "@capacitor/cli": "^6.0.0"
-  }
-}
-EOF
+            npm init -y
           fi
+
+          npm install @capacitor/core@^6 @capacitor/android@^6
+          npm install --save-dev @capacitor/cli@^6
 
           if [ ! -f capacitor.config.json ]; then
-            cat << 'EOF' > capacitor.config.json
-{
-  "appId": "com.shorts.app.v2",
-  "appName": "Shorts App",
-  "webDir": "public"
-}
-EOF
+            printf '{\n  "appId": "com.shorts.app.v2",\n  "appName": "Shorts App",\n  "webDir": "public"\n}' > capacitor.config.json
           fi
-
-          npm install
 
       - name: Configure Android Native
         run: |
