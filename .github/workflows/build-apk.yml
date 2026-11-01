@@ -14,13 +14,13 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '20'
 
       - name: Create Project Configuration & Install Capacitor
         run: |
@@ -29,7 +29,6 @@ jobs:
             cp index.html public/
           fi
 
-          # إنشاء ملف package.json تلقائياً وبدون أي تفاعل بشري
           cat << 'EOF' > package.json
           {
             "name": "shorts-app",
@@ -45,7 +44,6 @@ jobs:
           }
           EOF
 
-          # إنشاء ملف إعدادات كاباسيتور مباشرة
           cat << 'EOF' > capacitor.config.json
           {
             "appId": "com.shorts.app",
@@ -54,7 +52,6 @@ jobs:
           }
           EOF
 
-          # تثبيت الحزم وإضافة منصة الأندرويد بسلاسة تامة
           npm install
           npx cap add android
           npx cap sync android
