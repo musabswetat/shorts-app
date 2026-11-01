@@ -44,7 +44,6 @@ jobs:
             printf '{\n  "appId": "com.shorts.app.v2",\n  "appName": "Shorts App",\n  "webDir": "public"\n}' > capacitor.config.json
           fi
 
-          # حذف مجلد أندرويد القديم لضمان تطابق اسم الحزمة وتجنب أي تعارض
           rm -rf android
           npx cap add android
           npx cap sync android
@@ -193,7 +192,8 @@ jobs:
 
                                       JSONObject obj = new JSONObject();
                                       obj.put("name", file.getName());
-                                      obj.put("path", Uri.fromFile(cachedFile).toString());
+                                      // إرسال المسار المطلق الحقيقي ليتم تحويله بكاباسيتور عبر convertFileSrc
+                                      obj.put("path", cachedFile.getAbsolutePath());
                                       jsonArray.put(obj);
                                   }
                               }
@@ -210,6 +210,7 @@ jobs:
 
                   @JavascriptInterface
                   public void selectFolder() {
+                      mContext.runOnUiThread(() -> mContext.openFolderPtr = () -> mContext.openFolderPicker());
                       mContext.runOnUiThread(() -> mContext.openFolderPicker());
                   }
 
