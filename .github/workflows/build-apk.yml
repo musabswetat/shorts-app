@@ -47,26 +47,30 @@ jobs:
               > capacitor.config.json
           fi
 
-      - name: Prepare Android & Inject Native Code
+      - name: Prepare Android & Dependencies
         run: |
           if [ ! -d android ]; then
             npx cap add android
           fi
 
-          # إضافة أذونات التخزين في Manifest لتجنب قيود النظام
+          # إضافة أذونات التخزين والوسائط
           MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST_PATH" ]; then
             sed -i '/<uses-permission android:name="android.permission.INTERNET"/a \    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />' "$MANIFEST_PATH"
           fi
 
+          # إضافة مكتبة DocumentFile
           GRADLE_PATH="android/app/build.gradle"
           if [ -f "$GRADLE_PATH" ]; then
             sed -i '/dependencies {/a \    implementation "androidx.documentfile:documentfile:1.0.0"' "$GRADLE_PATH"
           fi
 
-          FOUND_ACTIVITY=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
-          if [ -f "$FOUND_ACTIVITY" ]; then
-            cat << 'JAVA_EOF' > "$FOUND_ACTIVITY"
+      - name: Create MainActivity Directly
+        run: |
+          # إنشاء المجلدات وإنشاء ملف MainActivity.java يدوياً لضمان عدم فقده أبداً
+          mkdir -p android/app/src/main/java/com/shorts/app/v2
+          
+          cat << 'JAVA_EOF' > android/app/src/main/java/com/shorts/app/v2/MainActivity.java
           package com.shorts.app.v2;
 
           import android.Manifest;
@@ -77,6 +81,8 @@ jobs:
           import android.net.Uri;
           import android.os.Bundle;
           import android.webkit.JavascriptInterface;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
           import androidx.activity.result.ActivityResultLauncher;
           import androidx.activity.result.contract.ActivityResultContracts;
           import androidx.core.app.ActivityCompat;
@@ -98,7 +104,13 @@ jobs:
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
 
-                  // طلب أذونات التخزين والوسائط عند التشغيل
+                  WebView webView = bridge.getWebView();
+                  WebSettings settings = webView.getSettings();
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowFileAccessFromFileURLs(true);
+                  settings.setAllowUniversalAccessFromFileURLs(true);
+                  settings.setMediaPlaybackRequiresUserGesture(false);
+
                   if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) != PackageManager.PERMISSION_GRANTED &&
                       ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                       ActivityCompat.requestPermissions(this, new String[]{
@@ -155,15 +167,17 @@ jobs:
                                   String name = file.getName().toLowerCase();
                                   if (name.endsWith(".mp4") || name.endsWith(".mkv") || name.endsWith(".webm") || name.endsWith(".mov")) {
                                       File cachedFile = new File(cacheDir, file.getName());
-                                      try (InputStream in = getContentResolver().openInputStream(file.getUri());
-                                           FileOutputStream out = new FileOutputStream(cachedFile)) {
-                                          byte[] buffer = new byte[8192];
-                                          int read;
-                                          while ((read = in.read(buffer)) != -1) {
-                                              out.write(buffer, 0, read);
+                                      if (!cachedFile.exists() || cachedFile.length() == 0) {
+                                          try (InputStream in = getContentResolver().openInputStream(file.getUri());
+                                               FileOutputStream out = new FileOutputStream(cachedFile)) {
+                                              byte[] buffer = new byte[16384];
+                                              int read;
+                                              while ((read = in.read(buffer)) != -1) {
+                                                  out.write(buffer, 0, read);
+                                              }
+                                          } catch (Exception e) {
+                                              continue;
                                           }
-                                      } catch (Exception e) {
-                                          continue;
                                       }
 
                                       JSONObject obj = new JSONObject();
@@ -196,7 +210,6 @@ jobs:
                       if (savedUriStr != null) {
                           try {
                               Uri savedUri = Uri.parse(savedUriStr);
-                              // التحقق من استمرار الصلاحية
                               mContext.getContentResolver().takePersistableUriPermission(savedUri,
                                   Intent.FLAG_GRANT_READ_URI_PERMISSION);
                               mContext.processVideosInBackground(savedUri);
@@ -208,7 +221,6 @@ jobs:
               }
           }
           JAVA_EOF
-          fi
 
       - name: Sync Android
         run: npx cap sync android
