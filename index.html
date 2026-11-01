@@ -1,283 +1,149 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Shorts</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body, html { width: 100%; height: 100%; background: #0f0f0f; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
-        
-        #welcomeScreen {
-            position: fixed; inset: 0; background: #0f0f0f;
-            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; gap: 20px; padding: 20px; text-align: center;
-        }
-        .welcome-box {
-            background: #1f1f1f; border: 1px solid #333; border-radius: 20px; padding: 30px 20px; max-width: 320px; width: 100%;
-            display: flex; flex-direction: column; align-items: center; gap: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-        }
-        .select-btn {
-            background: #ff0000; color: #fff; border: none; padding: 12px 24px; font-size: 16px;
-            border-radius: 12px; cursor: pointer; font-weight: bold; width: 100%;
-        }
-
-        #homeScreen {
-            position: fixed; inset: 0; background: #0f0f0f; display: none; flex-direction: column; z-index: 100;
-        }
-        .home-header {
-            padding: 14px 20px; font-size: 16px; font-weight: bold; border-bottom: 1px solid #222;
-            display: flex; align-items: center; justify-content: space-between; background: #121212; flex-shrink: 0;
-        }
-        .shorts-container {
-            flex: 1; overflow-y: auto; padding: 20px 15px; display: flex; flex-direction: column; gap: 20px; 
-            padding-bottom: 90px; -webkit-overflow-scrolling: touch; align-items: center;
-        }
-        .short-card {
-            background: #1a1a1a; border-radius: 16px; overflow: hidden; cursor: pointer;
-            width: 100%; max-width: 340px; height: 480px; display: flex; flex-direction: column; position: relative;
-            box-shadow: 0 6px 16px rgba(0,0,0,0.7); border: 1px solid #2a2a2a; flex-shrink: 0;
-        }
-        .short-card video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-events: none; display: block; }
-        .card-overlay {
-            position: absolute; bottom: 0; left: 0; right: 0; padding: 15px 12px;
-            background: linear-gradient(transparent, rgba(0,0,0,0.9)); font-size: 14px; font-weight: bold; color: #fff;
-        }
-
-        .player-container { 
-            height: 100vh; overflow-y: scroll; scroll-snap-type: y mandatory; 
-            -webkit-overflow-scrolling: touch; scrollbar-width: none; display: none; padding-bottom: 60px; scroll-behavior: smooth;
-            position: fixed; inset: 0; z-index: 500; background: #000;
-        }
-        .player-container::-webkit-scrollbar { display: none; }
-        .short-item { width: 100%; height: calc(100vh - 60px); scroll-snap-align: start; position: relative; display: flex; justify-content: center; align-items: center; background: #000; flex-shrink: 0; }
-        .short-item video { width: 100%; height: 100%; object-fit: cover; }
-        
-        .sidebar { position: absolute; right: 12px; bottom: 80px; display: flex; flex-direction: column; align-items: center; gap: 18px; z-index: 10; }
-        .action-group { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-        .glass-btn {
-            background: rgba(40, 40, 40, 0.6); border: 1px solid rgba(255, 255, 255, 0.15); color: #fff; width: 44px; height: 44px; border-radius: 50%;
-            display: flex; justify-content: center; align-items: center; cursor: pointer;
-        }
-        .glass-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; }
-        .action-text { font-size: 11px; color: #fff; }
-
-        .info { position: absolute; left: 16px; right: 75px; bottom: 20px; z-index: 10; }
-        .channel-row { display: flex; align-items: center; gap: 10px; }
-        .avatar { width: 34px; height: 34px; border-radius: 50%; background: #444; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 14px; }
-        .channel-name { font-size: 14px; font-weight: 600; }
-        .subscribe-btn { background: #fff; color: #000; border: none; padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: bold; cursor: pointer; }
-
-        .video-progress-container { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: rgba(255,255,255,0.2); z-index: 15; }
-        .video-progress-bar { height: 100%; background: #ff0000; width: 0%; transition: width 0.1s linear; }
-
-        .back-home-btn {
-            position: absolute; top: 15px; right: 15px; z-index: 600; background: rgba(0,0,0,0.6);
-            border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; cursor: pointer; font-weight: bold;
-        }
-
-        .bottom-nav {
-            position: fixed; bottom: 0; left: 0; right: 0; height: 60px;
-            background: #121212; border-top: 1px solid #222;
-            display: flex; justify-content: space-around; align-items: center; z-index: 1500;
-        }
-        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; background: none; border: none; color: #888; cursor: pointer; font-size: 10px; width: 25%; }
-        .nav-item.active { color: #fff; }
-        .nav-item svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; }
-        .nav-item.active svg { stroke: #ff0000; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f0f0f">
+<title>Shorts App</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0f0f0f;color:#fff;font-family:Arial,sans-serif}
+button{font:inherit}
+#welcomeScreen{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:22px;background:#0f0f0f;text-align:center}
+.welcome-box{width:100%;max-width:340px;padding:28px 20px;display:flex;flex-direction:column;gap:16px;align-items:center;background:#1d1d1d;border:1px solid #333;border-radius:20px}
+.welcome-box p{font-size:14px;line-height:1.8;color:#aaa}
+.select-btn{width:100%;padding:13px;border:0;border-radius:12px;background:#f00;color:white;font-weight:bold}
+#statusMessage{min-height:20px;font-size:12px;color:#ffb4b4}
+#homeScreen{position:fixed;inset:0;z-index:5;display:none;flex-direction:column;background:#0f0f0f}
+.home-header{padding:15px 18px;display:flex;justify-content:space-between;align-items:center;background:#121212;border-bottom:1px solid #292929;font-weight:bold}
+.header-action{border:0;background:none;color:#ff4545;font-size:13px}
+.shorts-container{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:18px 14px 85px;display:flex;flex-direction:column;align-items:center;gap:18px}
+.short-card{position:relative;flex:0 0 auto;width:100%;max-width:360px;height:min(66vh,510px);min-height:320px;overflow:hidden;border:1px solid #292929;border-radius:17px;background:#080808}
+.short-card video{width:100%;height:100%;object-fit:cover;background:#000}
+.card-overlay{position:absolute;inset:auto 0 0;padding:35px 14px 14px;background:linear-gradient(transparent,rgba(0,0,0,.85));font-weight:bold;pointer-events:none}
+.empty-state{padding:35px 20px;color:#aaa;text-align:center;line-height:1.8}
+.bottom-nav{position:fixed;z-index:15;inset:auto 0 0;height:62px;padding-bottom:env(safe-area-inset-bottom);display:flex;justify-content:space-around;align-items:center;background:#121212;border-top:1px solid #292929}
+.nav-item{width:33.333%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;border:0;background:none;color:#888;font-size:10px}
+.nav-item.active{color:white}
+.nav-item svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2}
+.nav-item.active svg{stroke:#f00}
+#feedContainer{position:fixed;inset:0;z-index:10;display:none;height:100%;overflow-y:auto;overscroll-behavior-y:contain;scroll-snap-type:y mandatory;scrollbar-width:none;background:#000;-webkit-overflow-scrolling:touch}
+#feedContainer::-webkit-scrollbar{display:none}
+.short-item{position:relative;width:100%;height:100%;min-height:100%;scroll-snap-align:start;scroll-snap-stop:always;display:flex;justify-content:center;align-items:center;background:#000}
+.short-item video{width:100%;height:100%;object-fit:contain;background:#000}
+.sidebar{position:absolute;right:13px;bottom:88px;z-index:3;display:flex;flex-direction:column;align-items:center;gap:17px}
+.action-group{display:flex;flex-direction:column;align-items:center;gap:5px}
+.glass-btn{width:45px;height:45px;display:flex;justify-content:center;align-items:center;border:1px solid #555;border-radius:50%;background:#333a;color:white}
+.glass-btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2}
+.glass-btn.liked{color:#ff3b5c}
+.action-text{font-size:11px}
+.info{position:absolute;left:15px;right:72px;bottom:24px;z-index:3}
+.channel-row{display:flex;align-items:center;gap:9px}
+.avatar{width:35px;height:35px;flex:0 0 35px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#444;font-weight:bold}
+.channel-name{max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:bold}
+.subscribe-btn{padding:7px 13px;border:0;border-radius:18px;background:white;color:#111;font-size:12px;font-weight:bold}
+.video-progress-container{position:absolute;inset:auto 0 0;height:3px;z-index:4;background:#ffffff33}
+.video-progress-bar{width:0;height:100%;background:#f00}
+.back-home-btn{position:fixed;top:max(14px,env(safe-area-inset-top));right:14px;z-index:12;padding:9px 15px;border:1px solid #ffffff55;border-radius:20px;background:#000a;color:white;font-size:13px;font-weight:bold}
+.video-error{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:35px;background:#000d;color:white;text-align:center;line-height:1.8;pointer-events:none}
+</style>
 </head>
 <body>
-
-    <div id="welcomeScreen">
-        <div class="welcome-box">
-            <h2 id="welcomeTitle" style="font-size: 18px; font-weight: bold;">YouTube Shorts</h2>
-            <p id="welcomeDesc" style="font-size: 13px; color: #aaa;">اختر مجلد الفيديوهات لبدء التشغيل</p>
-            <button class="select-btn" id="selectBtn" onclick="triggerFolderSelect()">اختر المجلد</button>
-        </div>
-    </div>
-
-    <div id="homeScreen">
-        <div class="home-header">
-            <span>Shorts (المجلد المحفوظ)</span>
-            <span style="font-size: 12px; color: #ff0000; cursor: pointer;" onclick="triggerFolderSelect()">تغيير المجلد</span>
-        </div>
-        <div class="shorts-container" id="shortsGrid"></div>
-    </div>
-
-    <div class="player-container" id="feedContainer">
-        <button class="back-home-btn" onclick="returnToHome()">الرئيسية ✕</button>
-    </div>
-
-    <div class="bottom-nav">
-        <button class="nav-item active" onclick="handleNavClick(0, 'home')">
-            <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            <span>الرئيسية</span>
-        </button>
-        <button class="nav-item" onclick="handleNavClick(1, 'shuffle')">
-            <svg viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-            <span>عشوائي</span>
-        </button>
-        <button class="nav-item" onclick="handleNavClick(2, 'refresh')">
-            <svg viewBox="0 0 24 24"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.65-5.65"/></svg>
-            <span>تحديث</span>
-        </button>
-    </div>
-
-    <script>
-        let displayList = [];
-        let currentIndex = 0;
-        const PRELOAD_COUNT = 5;
-
-        window.addEventListener('DOMContentLoaded', () => {
-            setTimeout(() => {
-                if (window.AndroidBridge && typeof window.AndroidBridge.checkSavedFolder === 'function') {
-                    window.AndroidBridge.checkSavedFolder();
-                }
-            }, 500);
-        });
-
-        function triggerFolderSelect() {
-            if (window.AndroidBridge && typeof window.AndroidBridge.selectFolder === 'function') {
-                window.AndroidBridge.selectFolder();
-            } else {
-                alert('هذه الميزة تعمل داخل تطبيق أندرويد.');
-            }
-        }
-
-        // دالة تحويل مسار الملف ليعمل بسلاسة داخل WebView عبر Capacitor
-        function getSafeVideoUrl(rawPath) {
-            if (window.Capacitor && typeof window.Capacitor.convertFileSrc === 'function') {
-                return window.Capacitor.convertFileSrc(rawPath);
-            }
-            return rawPath;
-        }
-
-        window.onFolderSelected = function(videos) {
-            if (!videos || videos.length === 0) {
-                return;
-            }
-            displayList = videos;
-            document.getElementById('welcomeScreen').style.display = 'none';
-            document.getElementById('homeScreen').style.display = 'flex';
-            renderHomeGrid();
-        };
-
-        function renderHomeGrid() {
-            const grid = document.getElementById('shortsGrid');
-            grid.innerHTML = '';
-
-            displayList.forEach((item, index) => {
-                const nameWithoutExt = item.name.substring(0, item.name.lastIndexOf('.')) || item.name;
-                const channelName = nameWithoutExt.split('_')[0] || 'قناة';
-                const safeUrl = getSafeVideoUrl(item.path);
-
-                const card = document.createElement('div');
-                card.className = 'short-card';
-                card.onclick = () => openPlayer(index);
-                card.innerHTML = `
-                    <video src="${safeUrl}" preload="metadata" muted playsinline></video>
-                    <div class="card-overlay">
-                        <span>@${channelName}</span>
-                    </div>
-                `;
-                grid.appendChild(card);
-            });
-        }
-
-        function openPlayer(index) {
-            document.getElementById('homeScreen').style.display = 'none';
-            document.getElementById('feedContainer').style.display = 'block';
-            renderPlayerFeed();
-            setTimeout(() => {
-                const targetItem = document.querySelector(`.short-item[data-index='${index}']`);
-                if (targetItem) targetItem.scrollIntoView({ behavior: 'instant' });
-            }, 50);
-        }
-
-        function returnToHome() {
-            document.querySelectorAll('.player-container video').forEach(v => v.pause());
-            document.getElementById('feedContainer').style.display = 'none';
-            document.getElementById('homeScreen').style.display = 'flex';
-        }
-
-        function renderPlayerFeed() {
-            const container = document.getElementById('feedContainer');
-            const backBtnHTML = container.querySelector('.back-home-btn').outerHTML;
-            container.innerHTML = backBtnHTML;
-
-            displayList.forEach((item, index) => {
-                const nameWithoutExt = item.name.substring(0, item.name.lastIndexOf('.')) || item.name;
-                const channelName = nameWithoutExt.split('_')[0] || 'قناة';
-                const safeUrl = getSafeVideoUrl(item.path);
-
-                const div = document.createElement('div');
-                div.className = 'short-item';
-                div.dataset.index = index;
-                div.innerHTML = `
-                    <video loop playsinline preload="auto" onclick="togglePlay(this)" ontimeupdate="updateProgress(this, ${index})">
-                        <source src="${safeUrl}" type="video/mp4">
-                    </video>
-                    <div class="sidebar">
-                        <div class="action-group">
-                            <button class="glass-btn" id="likeBtn_${index}" onclick="handleLike(${index})">
-                                <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
-                            </button>
-                            <span class="action-text" id="likeCount_${index}">124</span>
-                        </div>
-                    </div>
-                    <div class="info">
-                        <div class="channel-row">
-                            <div class="avatar">${channelName.charAt(0).toUpperCase()}</div>
-                            <span class="channel-name">@${channelName}</span>
-                            <button class="subscribe-btn" onclick="this.innerText = this.innerText === 'اشتراك' ? 'مشترك' : 'اشتراك'">اشتراك</button>
-                        </div>
-                    </div>
-                    <div class="video-progress-container">
-                        <div class="video-progress-bar" id="progress_${index}"></div>
-                    </div>
-                `;
-                container.appendChild(div);
-            });
-            setupObserver();
-            updateBuffer(0);
-        }
-
-        function updateBuffer(activeIdx) {
-            currentIndex = activeIdx;
-            const items = document.querySelectorAll('.short-item');
-            items.forEach((item, index) => {
-                const video = item.querySelector('video');
-                if (index >= currentIndex - 1 && index <= currentIndex + PRELOAD_COUNT) {
-                    if (index === currentIndex) {
-                        video.play().catch(e => console.log("Play blocked:", e));
-                    } else {
-                        video.pause();
-                        video.currentTime = 0;
-                    }
-                } else {
-                    video.pause();
-                }
-            });
-        }
-
-        function togglePlay(v) { v.paused ? v.play() : v.pause(); }
-        function handleLike(i) { document.getElementById(`likeBtn_${i}`).classList.toggle('liked'); }
-        function updateProgress(v, i) {
-            if (!v.duration) return;
-            document.getElementById(`progress_${i}`).style.width = ((v.currentTime / v.duration) * 100) + '%';
-        }
-        function handleNavClick(idx, action) {
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            document.querySelectorAll('.nav-item')[idx].classList.add('active');
-            if (action === 'home') returnToHome();
-            if (action === 'shuffle') { displayList.sort(() => Math.random() - 0.5); renderHomeGrid(); }
-        }
-        function setupObserver() {
-            const obs = new IntersectionObserver((entries) => {
-                entries.forEach(e => { if (e.isIntersecting) updateBuffer(parseInt(e.target.dataset.index)); });
-            }, { threshold: 0.7 });
-            document.querySelectorAll('.short-item').forEach(i => obs.observe(i));
-        }
-    </script>
+<section id="welcomeScreen"><div class="welcome-box">
+<h2>Shorts App</h2>
+<p>اختر المجلد الذي يحتوي على الفيديوهات. سيحفظ التطبيق اختيارك لفتحه تلقائياً لاحقاً.</p>
+<button class="select-btn" type="button" onclick="triggerFolderSelect()">اختر مجلد الفيديوهات</button>
+<div id="statusMessage"></div>
+</div></section>
+<main id="homeScreen">
+<header class="home-header"><span>مقاطع الفيديو</span><button class="header-action" onclick="triggerFolderSelect()">تغيير المجلد</button></header>
+<section class="shorts-container" id="shortsGrid"></section>
+</main>
+<main id="feedContainer"><button class="back-home-btn" onclick="returnToHome()">الرئيسية ✕</button></main>
+<nav class="bottom-nav" id="bottomNav">
+<button class="nav-item active" onclick="handleNavClick('home',this)"><svg viewBox="0 0 24 24"><path d="M3 10 12 3l9 7v10h-6v-7H9v7H3z"/></svg><span>الرئيسية</span></button>
+<button class="nav-item" onclick="handleNavClick('shuffle',this)"><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M16 21h5v-5M4 4l5 5m3 3 9 9"/></svg><span>عشوائي</span></button>
+<button class="nav-item" onclick="handleNavClick('refresh',this)"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M5 9a7 7 0 0 1 13-3l2 6M4 12l2 6a7 7 0 0 0 12-3"/></svg><span>تحديث</span></button>
+</nav>
+<script>
+'use strict';
+let displayList=[],currentIndex=-1,feedObserver=null;
+document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{if(window.AndroidBridge)window.AndroidBridge.checkSavedFolder()},250));
+function setStatus(t){const e=document.getElementById('statusMessage');if(e)e.textContent=t||''}
+function triggerFolderSelect(){if(window.AndroidBridge){setStatus('افتح نافذة اختيار المجلد...');window.AndroidBridge.selectFolder()}else setStatus('هذه الميزة تعمل داخل تطبيق أندرويد.')}
+function getSafeVideoUrl(path){
+ if(!path)return '';
+ let uri=String(path);
+ if(!uri.startsWith('file://'))uri='file://'+(uri.startsWith('/')?'':'/')+uri;
+ return window.Capacitor&&typeof window.Capacitor.convertFileSrc==='function'?window.Capacitor.convertFileSrc(uri):uri;
+}
+window.onFolderSelected=function(videos){
+ if(!Array.isArray(videos)||!videos.length){setStatus('لم نعثر على فيديوهات في هذا المجلد.');return}
+ displayList=videos;document.getElementById('welcomeScreen').style.display='none';
+ document.getElementById('homeScreen').style.display='flex';document.getElementById('feedContainer').style.display='none';
+ document.getElementById('bottomNav').style.display='flex';renderHomeGrid();
+};
+window.onFolderError=function(message){setStatus(message||'تعذر قراءة المجلد. اختره مرة أخرى.')};
+function channelName(name){return String(name||'').replace(/\.[^.]+$/,'').split('_')[0]||'قناة'}
+function renderHomeGrid(){
+ const grid=document.getElementById('shortsGrid');grid.replaceChildren();
+ if(!displayList.length){const e=document.createElement('div');e.className='empty-state';e.textContent='لا توجد فيديوهات في المجلد المحدد.';grid.append(e);return}
+ displayList.forEach((item,index)=>{
+  const card=document.createElement('article');card.className='short-card';card.onclick=()=>openPlayer(index);
+  const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='metadata';v.src=getSafeVideoUrl(item.path);
+  const label=document.createElement('div');label.className='card-overlay';label.textContent='@'+channelName(item.name);
+  card.append(v,label);grid.append(card);
+ });
+}
+function createPlayerItem(item,index){
+ const section=document.createElement('section');section.className='short-item';section.dataset.index=String(index);
+ const video=document.createElement('video');video.loop=true;video.playsInline=true;video.preload='metadata';video.setAttribute('webkit-playsinline','');video.src=getSafeVideoUrl(item.path);
+ video.onclick=()=>togglePlay(video);video.ontimeupdate=()=>updateProgress(video,index);
+ const error=document.createElement('div');error.className='video-error';error.textContent='تعذر تشغيل هذا الفيديو. قد تكون صيغة الفيديو أو ترميزه غير مدعوم على هذا الجهاز.';
+ video.onerror=()=>error.style.display='flex';
+ const sidebar=document.createElement('div');sidebar.className='sidebar';
+ const group=document.createElement('div');group.className='action-group';
+ const like=document.createElement('button');like.className='glass-btn';like.type='button';like.innerHTML='<svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1 7.8 7.7 7.8-7.7 1.1-1.1a5.5 5.5 0 0 0-.1-7.8z"/></svg>';
+ like.onclick=e=>{e.stopPropagation();like.classList.toggle('liked')};
+ const count=document.createElement('span');count.className='action-text';count.textContent='♡';group.append(like,count);sidebar.append(group);
+ const info=document.createElement('div');info.className='info';const row=document.createElement('div');row.className='channel-row';
+ const name=channelName(item.name),avatar=document.createElement('div');avatar.className='avatar';avatar.textContent=name.charAt(0).toUpperCase();
+ const label=document.createElement('span');label.className='channel-name';label.textContent='@'+name;
+ const sub=document.createElement('button');sub.className='subscribe-btn';sub.textContent='اشتراك';sub.onclick=e=>{e.stopPropagation();sub.textContent=sub.textContent==='اشتراك'?'مشترك':'اشتراك'};
+ row.append(avatar,label,sub);info.append(row);
+ const pc=document.createElement('div');pc.className='video-progress-container';const bar=document.createElement('div');bar.className='video-progress-bar';bar.id='progress_'+index;pc.append(bar);
+ section.append(video,error,sidebar,info,pc);return section;
+}
+function openPlayer(index){
+ const feed=document.getElementById('feedContainer');if(feedObserver){feedObserver.disconnect();feedObserver=null}
+ feed.replaceChildren();const back=document.createElement('button');back.className='back-home-btn';back.textContent='الرئيسية ✕';back.onclick=returnToHome;feed.append(back);
+ displayList.forEach((item,i)=>feed.append(createPlayerItem(item,i)));
+ document.getElementById('homeScreen').style.display='none';document.getElementById('bottomNav').style.display='none';feed.style.display='block';
+ setupObserver();currentIndex=index;
+ requestAnimationFrame(()=>{const target=feed.querySelector('.short-item[data-index="'+index+'"]');if(target){feed.scrollTop=target.offsetTop;updateBuffer(index)}});
+}
+function returnToHome(){document.querySelectorAll('#feedContainer video').forEach(v=>v.pause());currentIndex=-1;document.getElementById('feedContainer').style.display='none';document.getElementById('homeScreen').style.display='flex';document.getElementById('bottomNav').style.display='flex'}
+function updateBuffer(active){
+ if(!Number.isInteger(active)||active<0)return;currentIndex=active;
+ document.querySelectorAll('.short-item').forEach((item,i)=>{const v=item.querySelector('video');if(!v)return;
+  if(i===active){v.preload='auto';if(v.paused){const p=v.play();if(p&&p.catch)p.catch(e=>console.log('Play failed',e))}}
+  else{v.pause();v.preload=Math.abs(i-active)<=1?'metadata':'none'}
+ });
+}
+function togglePlay(v){if(v.paused){const p=v.play();if(p&&p.catch)p.catch(console.log)}else v.pause()}
+function updateProgress(v,i){if(!v.duration||!Number.isFinite(v.duration))return;const bar=document.getElementById('progress_'+i);if(bar)bar.style.width=(v.currentTime/v.duration*100)+'%'}
+function setupObserver(){
+ const feed=document.getElementById('feedContainer');
+ feedObserver=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];if(visible&&visible.intersectionRatio>=.55)updateBuffer(Number(visible.target.dataset.index))},{root:feed,threshold:[.35,.55,.75]});
+ feed.querySelectorAll('.short-item').forEach(e=>feedObserver.observe(e));
+}
+function handleNavClick(action,button){
+ document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));button.classList.add('active');
+ if(action==='home')returnToHome();
+ if(action==='shuffle'){displayList=[...displayList].sort(()=>Math.random()-.5);renderHomeGrid()}
+ if(action==='refresh'&&window.AndroidBridge)window.AndroidBridge.checkSavedFolder();
+}
+window.handleAndroidBack=function(){if(document.getElementById('feedContainer').style.display==='block'){returnToHome();return true}return false};
+</script>
 </body>
 </html>
