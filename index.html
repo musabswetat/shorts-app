@@ -4,482 +4,382 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0f0f0f">
+<meta name="theme-color" content="#101010">
 <title>Shorts App</title>
 
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{width:100%;height:100%;overflow:hidden;background:#0f0f0f;color:#fff;font-family:Arial,sans-serif}
-button{font:inherit}
-#welcomeScreen{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:22px;background:#0f0f0f;text-align:center}
-.welcome-box{width:100%;max-width:340px;padding:28px 20px;display:flex;flex-direction:column;gap:16px;align-items:center;background:#1d1d1d;border:1px solid #333;border-radius:20px}
-.welcome-box p{font-size:14px;line-height:1.8;color:#aaa}
-.select-btn{width:100%;padding:13px;border:0;border-radius:12px;background:#f00;color:white;font-weight:bold}
-#statusMessage{min-height:20px;font-size:12px;color:#ffb4b4;line-height:1.7}
-#homeScreen{position:fixed;inset:0;z-index:5;display:none;flex-direction:column;background:#0f0f0f}
-.home-header{padding:15px 18px;display:flex;justify-content:space-between;align-items:center;background:#121212;border-bottom:1px solid #292929;font-weight:bold}
-.header-action{border:0;background:none;color:#ff4545;font-size:13px}
-.shorts-container{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:18px 14px 85px;display:flex;flex-direction:column;align-items:center;gap:18px}
-.short-card{position:relative;flex:0 0 auto;width:100%;max-width:360px;height:min(66vh,510px);min-height:320px;overflow:hidden;border:1px solid #292929;border-radius:17px;background:#080808}
-.short-card video{width:100%;height:100%;object-fit:cover;background:#000}
-.card-overlay{position:absolute;inset:auto 0 0;padding:35px 14px 14px;background:linear-gradient(transparent,rgba(0,0,0,.85));font-weight:bold;pointer-events:none}
-.empty-state{padding:35px 20px;color:#aaa;text-align:center;line-height:1.8}
-.bottom-nav{position:fixed;z-index:15;inset:auto 0 0;height:62px;padding-bottom:env(safe-area-inset-bottom);display:flex;justify-content:space-around;align-items:center;background:#121212;border-top:1px solid #292929}
-.nav-item{width:33.333%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;border:0;background:none;color:#888;font-size:10px}
-.nav-item.active{color:white}
-.nav-item svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2}
-.nav-item.active svg{stroke:#f00}
-#feedContainer{position:fixed;inset:0;z-index:10;display:none;height:100%;overflow-y:auto;overscroll-behavior-y:contain;scroll-snap-type:y mandatory;scrollbar-width:none;background:#000;-webkit-overflow-scrolling:touch}
-#feedContainer::-webkit-scrollbar{display:none}
-.short-item{position:relative;width:100%;height:100%;min-height:100%;scroll-snap-align:start;scroll-snap-stop:always;display:flex;justify-content:center;align-items:center;background:#000}
-.short-item video{width:100%;height:100%;object-fit:contain;background:#000}
-.sidebar{position:absolute;right:13px;bottom:88px;z-index:3;display:flex;flex-direction:column;align-items:center;gap:17px}
-.action-group{display:flex;flex-direction:column;align-items:center;gap:5px}
-.glass-btn{width:45px;height:45px;display:flex;justify-content:center;align-items:center;border:1px solid #555;border-radius:50%;background:#333a;color:white}
-.glass-btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2}
-.glass-btn.liked{color:#ff3b5c}
-.action-text{font-size:11px}
-.info{position:absolute;left:15px;right:72px;bottom:24px;z-index:3}
-.channel-row{display:flex;align-items:center;gap:9px}
-.avatar{width:35px;height:35px;flex:0 0 35px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#444;font-weight:bold}
-.channel-name{max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:bold}
-.subscribe-btn{padding:7px 13px;border:0;border-radius:18px;background:white;color:#111;font-size:12px;font-weight:bold}
-.video-progress-container{position:absolute;inset:auto 0 0;height:3px;z-index:4;background:#ffffff33}
-.video-progress-bar{width:0;height:100%;background:#f00}
-.back-home-btn{position:fixed;top:max(14px,env(safe-area-inset-top));right:14px;z-index:12;padding:9px 15px;border:1px solid #ffffff55;border-radius:20px;background:#000a;color:white;font-size:13px;font-weight:bold}
-.video-error{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:25px;background:#000e;color:white;text-align:center;line-height:1.8;z-index:5;overflow-wrap:anywhere}
-.video-error small{display:block;color:#ffb4b4;font-size:11px;margin-top:10px;direction:ltr}
+html,body{width:100%;height:100%;overflow:hidden;background:#101010;color:#fff;font-family:Arial,sans-serif}
+button{font:inherit;cursor:pointer}
+#loading{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;background:#101010}
+.loading-box{width:100%;max-width:360px;padding:25px;background:#1d1d1d;border:1px solid #333;border-radius:18px;text-align:center}
+.loading-box h2{margin-bottom:12px}
+.loading-box p{color:#aaa;font-size:14px;line-height:1.8}
+.primary-btn{width:100%;margin-top:18px;padding:14px;border:0;border-radius:12px;background:#f00;color:#fff;font-weight:bold}
+#status{margin-top:12px;color:#ffaaaa;font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+#home{position:fixed;inset:0;display:none;flex-direction:column}
+header{height:58px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 18px;background:#171717;border-bottom:1px solid #292929;font-weight:bold}
+header button{border:0;background:none;color:#ff4545;font-size:13px}
+#grid{flex:1;overflow-y:auto;padding:15px 13px 85px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:13px}
+.card{height:190px;position:relative;display:flex;align-items:flex-end;padding:13px;border:1px solid #333;border-radius:14px;background:linear-gradient(145deg,#292929,#111);overflow:hidden}
+.card:before{content:"▶";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#ffffff25;font-size:50px}
+.card span{position:relative;z-index:1;font-size:13px;overflow-wrap:anywhere}
+#feed{position:fixed;inset:0;z-index:10;display:none;overflow-y:auto;scroll-snap-type:y mandatory;overscroll-behavior-y:contain;background:#000;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+#feed::-webkit-scrollbar{display:none}
+.item{height:100%;min-height:100%;width:100%;position:relative;display:flex;align-items:center;justify-content:center;scroll-snap-align:start;scroll-snap-stop:always;background:#000}
+.item video{width:100%;height:100%;object-fit:contain;background:#000}
+.back{position:fixed;top:max(15px,env(safe-area-inset-top));right:14px;z-index:15;padding:10px 15px;border:1px solid #ffffff55;border-radius:22px;background:#000b;color:#fff;font-size:13px}
+.video-info{position:absolute;left:15px;right:15px;bottom:28px;z-index:3;padding:35px 10px 8px;background:linear-gradient(transparent,#0009);pointer-events:none}
+.video-info span{font-size:14px;font-weight:bold;overflow-wrap:anywhere}
+.error{position:absolute;inset:0;z-index:5;display:none;align-items:center;justify-content:center;padding:24px;background:#000e;text-align:center;line-height:1.8;overflow-wrap:anywhere}
+.error small{display:block;margin-top:12px;color:#ffb1b1;font-size:11px;direction:ltr;overflow-wrap:anywhere}
+#nav{position:fixed;inset:auto 0 0;z-index:8;height:62px;padding-bottom:env(safe-area-inset-bottom);display:none;justify-content:space-around;align-items:center;background:#171717;border-top:1px solid #292929}
+#nav button{flex:1;height:100%;border:0;background:none;color:#aaa;font-size:12px}
+#nav button.active{color:#f44}
+#empty{grid-column:1/-1;padding:35px 10px;text-align:center;color:#aaa;line-height:1.8}
 </style>
 </head>
 
 <body>
 
-<section id="welcomeScreen">
-  <div class="welcome-box">
+<section id="loading">
+  <div class="loading-box">
     <h2>Shorts App</h2>
-    <p>اختر المجلد الذي يحتوي على الفيديوهات. سيحفظ التطبيق اختيارك لفتحه تلقائياً لاحقاً.</p>
-    <button class="select-btn" type="button" onclick="triggerFolderSelect()">اختر مجلد الفيديوهات</button>
-    <div id="statusMessage"></div>
+    <p>اختر مجلد الفيديوهات لعرض المقاطع وتشغيلها عمودياً.</p>
+    <button class="primary-btn" onclick="selectFolder()">اختيار مجلد الفيديوهات</button>
+    <div id="status"></div>
   </div>
 </section>
 
-<main id="homeScreen">
-  <header class="home-header">
+<main id="home">
+  <header>
     <span>مقاطع الفيديو</span>
-    <button class="header-action" onclick="triggerFolderSelect()">تغيير المجلد</button>
+    <button onclick="selectFolder()">تغيير المجلد</button>
   </header>
-  <section class="shorts-container" id="shortsGrid"></section>
+  <section id="grid"></section>
 </main>
 
-<main id="feedContainer"></main>
+<main id="feed"></main>
 
-<nav class="bottom-nav" id="bottomNav">
-  <button class="nav-item active" onclick="handleNavClick('home',this)">
-    <svg viewBox="0 0 24 24"><path d="M3 10 12 3l9 7v10h-6v-7H9v7H3z"/></svg>
-    <span>الرئيسية</span>
-  </button>
-  <button class="nav-item" onclick="handleNavClick('shuffle',this)">
-    <svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M16 21h5v-5M4 4l5 5m3 3 9 9"/></svg>
-    <span>عشوائي</span>
-  </button>
-  <button class="nav-item" onclick="handleNavClick('refresh',this)">
-    <svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M5 9a7 7 0 0 1 13-3l2 6M4 12l2 6a7 7 0 0 0 12-3"/></svg>
-    <span>تحديث</span>
-  </button>
+<nav id="nav">
+  <button class="active" onclick="goHome()">الرئيسية</button>
+  <button onclick="shuffleVideos()">عشوائي</button>
+  <button onclick="reloadFolder()">تحديث</button>
 </nav>
 
 <script>
 'use strict';
 
-let displayList=[];
-let currentIndex=-1;
-let feedObserver=null;
+let videosList=[];
+let observer=null;
+let activeIndex=-1;
+
+const $=id=>document.getElementById(id);
 
 document.addEventListener('DOMContentLoaded',()=>{
   setTimeout(()=>{
     if(window.AndroidBridge){
       window.AndroidBridge.checkSavedFolder();
     }
-  },400);
+  },500);
 });
 
 function setStatus(message){
-  const element=document.getElementById('statusMessage');
-  if(element) element.textContent=message||'';
+  $('status').textContent=message||'';
 }
 
-function triggerFolderSelect(){
-  if(window.AndroidBridge){
-    setStatus('جارٍ فتح اختيار المجلد...');
-    window.AndroidBridge.selectFolder();
-  }else{
-    setStatus('هذه الميزة تعمل داخل تطبيق أندرويد.');
-  }
-}
-
-/* تحويل مسار الملف الحقيقي إلى عنوان يستطيع WebView فتحه */
-function getSafeVideoUrl(path){
-  if(!path) return '';
-
-  let uri=String(path).trim();
-
-  if(/^https?:\/\//i.test(uri)) return uri;
-
-  if(uri.startsWith('file://')){
-    // المسار جاهز
-  }else if(uri.startsWith('/')){
-    uri='file://'+uri;
-  }else{
-    uri='file:///'+uri;
-  }
-
-  if(window.Capacitor &&
-     typeof window.Capacitor.convertFileSrc==='function'){
-    return window.Capacitor.convertFileSrc(uri);
-  }
-
-  console.error('Capacitor.convertFileSrc is unavailable',uri);
-  return '';
-}
-
-function videoErrorText(video){
-  const code=video.error ? video.error.code : 0;
-  const messages={
-    1:'تم إيقاف تحميل الفيديو.',
-    2:'حدث خطأ أثناء قراءة ملف الفيديو.',
-    3:'تعذر فك ترميز الفيديو.',
-    4:'المتصفح لا يتعرف على مصدر الفيديو.'
-  };
-
-  return (messages[code]||'خطأ غير معروف في تشغيل الفيديو.')+
-    '\nرمز الخطأ: '+code;
-}
-
-function attachVideo(video,path,errorBox){
-  const url=getSafeVideoUrl(path);
-
-  if(!url){
-    errorBox.style.display='flex';
-    errorBox.textContent='تعذر تحويل مسار الفيديو. تحقق من نسخة التطبيق.';
+function selectFolder(){
+  if(!window.AndroidBridge){
+    setStatus('يجب تشغيل التطبيق على أندرويد.');
     return;
   }
 
+  setStatus('جارٍ فتح اختيار المجلد...');
+  window.AndroidBridge.selectFolder();
+}
+
+function reloadFolder(){
+  if(window.AndroidBridge){
+    setStatus('جارٍ تحديث الفيديوهات...');
+    window.AndroidBridge.checkSavedFolder();
+  }
+}
+
+function safeVideoUrl(path){
+  if(!path)return '';
+
+  let uri=String(path);
+
+  if(!uri.startsWith('file://')){
+    uri='file://'+(uri.startsWith('/')?'':'/')+uri;
+  }
+
+  if(!window.Capacitor ||
+     typeof window.Capacitor.convertFileSrc!=='function'){
+    throw new Error('Capacitor.convertFileSrc غير متاح');
+  }
+
+  return window.Capacitor.convertFileSrc(uri);
+}
+
+window.onFolderSelected=function(list){
+  if(!Array.isArray(list)||!list.length){
+    setStatus('لم يتم العثور على فيديوهات.');
+    return;
+  }
+
+  videosList=list;
+  setStatus('');
+
+  $('loading').style.display='none';
+  $('home').style.display='flex';
+  $('feed').style.display='none';
+  $('nav').style.display='flex';
+
+  renderGrid();
+};
+
+window.onFolderError=function(message){
+  setStatus(message||'حدث خطأ أثناء قراءة المجلد.');
+};
+
+function renderGrid(){
+  const grid=$('grid');
+  grid.replaceChildren();
+
+  if(!videosList.length){
+    const empty=document.createElement('div');
+    empty.id='empty';
+    empty.textContent='لا توجد فيديوهات في هذا المجلد.';
+    grid.append(empty);
+    return;
+  }
+
+  videosList.forEach((item,index)=>{
+    const card=document.createElement('button');
+    card.className='card';
+    card.type='button';
+
+    const label=document.createElement('span');
+    label.textContent=item.name||'فيديو '+(index+1);
+
+    card.append(label);
+    card.onclick=()=>openFeed(index);
+    grid.append(card);
+  });
+}
+
+function createItem(item,index){
+  const section=document.createElement('section');
+  section.className='item';
+  section.dataset.index=String(index);
+
+  const video=document.createElement('video');
+  video.playsInline=true;
+  video.setAttribute('playsinline','');
+  video.preload='none';
+  video.muted=true;
+  video.controls=false;
+  video.dataset.path=item.path;
+  video.dataset.loaded='false';
+
+  video.onclick=()=>{
+    if(video.paused){
+      video.play().catch(e=>showError(section,e));
+    }else{
+      video.pause();
+    }
+  };
+
+  const error=document.createElement('div');
+  error.className='error';
+
   video.addEventListener('error',()=>{
-    errorBox.style.display='flex';
-    errorBox.textContent=videoErrorText(video);
+    const code=video.error?video.error.code:0;
+    const message=video.error?video.error.message:'غير معروف';
+    const url=video.currentSrc||'غير متوفر';
+
+    error.replaceChildren();
+
+    const title=document.createElement('div');
+    title.textContent=
+      'تعذر تشغيل الفيديو. رمز الخطأ: '+code;
 
     const details=document.createElement('small');
-    details.textContent='SRC: '+(video.currentSrc||url);
-    errorBox.appendChild(details);
+    details.textContent=
+      'الرسالة: '+message+
+      '\nالمصدر: '+url+
+      '\nالحجم: '+(item.size||'غير معروف');
+
+    error.append(title,details);
+    error.style.display='flex';
 
     console.error('Video playback error',{
-      path:path,
+      name:item.name,
+      path:item.path,
       url:url,
-      code:video.error ? video.error.code : null,
-      message:video.error ? video.error.message : null,
+      code:code,
+      message:message,
       networkState:video.networkState,
       readyState:video.readyState
     });
   });
 
   video.addEventListener('loadeddata',()=>{
-    errorBox.style.display='none';
+    error.style.display='none';
   });
-
-  video.src=url;
-  video.load();
-}
-
-window.onFolderSelected=function(videos){
-  if(!Array.isArray(videos)||!videos.length){
-    setStatus('لم نعثر على فيديوهات في هذا المجلد.');
-    return;
-  }
-
-  displayList=videos;
-  setStatus('');
-
-  document.getElementById('welcomeScreen').style.display='none';
-  document.getElementById('homeScreen').style.display='flex';
-  document.getElementById('feedContainer').style.display='none';
-  document.getElementById('bottomNav').style.display='flex';
-
-  renderHomeGrid();
-};
-
-window.onFolderError=function(message){
-  setStatus(message||'تعذر قراءة المجلد. اختره مرة أخرى.');
-};
-
-function channelName(name){
-  return String(name||'').replace(/\.[^.]+$/,'').split('_')[0]||'قناة';
-}
-
-function renderHomeGrid(){
-  const grid=document.getElementById('shortsGrid');
-  grid.replaceChildren();
-
-  if(!displayList.length){
-    const e=document.createElement('div');
-    e.className='empty-state';
-    e.textContent='لا توجد فيديوهات في المجلد المحدد.';
-    grid.append(e);
-    return;
-  }
-
-  displayList.forEach((item,index)=>{
-    const card=document.createElement('article');
-    card.className='short-card';
-    card.onclick=()=>openPlayer(index);
-
-    const video=document.createElement('video');
-    video.muted=true;
-    video.playsInline=true;
-    video.preload='metadata';
-
-    const error=document.createElement('div');
-    error.className='video-error';
-
-    attachVideo(video,item.path,error);
-
-    const label=document.createElement('div');
-    label.className='card-overlay';
-    label.textContent='@'+channelName(item.name);
-
-    card.append(video,label,error);
-    grid.append(card);
-  });
-}
-
-function createPlayerItem(item,index){
-  const section=document.createElement('section');
-  section.className='short-item';
-  section.dataset.index=String(index);
-
-  const video=document.createElement('video');
-  video.loop=true;
-  video.playsInline=true;
-  video.preload='none';
-  video.setAttribute('webkit-playsinline','');
-  video.onclick=()=>togglePlay(video);
-
-  video.ontimeupdate=()=>updateProgress(video,index);
-
-  const error=document.createElement('div');
-  error.className='video-error';
-
-  attachVideo(video,item.path,error);
-
-  const sidebar=document.createElement('div');
-  sidebar.className='sidebar';
-
-  const group=document.createElement('div');
-  group.className='action-group';
-
-  const like=document.createElement('button');
-  like.className='glass-btn';
-  like.type='button';
-  like.innerHTML='<svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1 7.8 7.7 7.8-7.7 1.1-1.1a5.5 5.5 0 0 0-.1-7.8z"/></svg>';
-
-  like.onclick=e=>{
-    e.stopPropagation();
-    like.classList.toggle('liked');
-  };
-
-  const count=document.createElement('span');
-  count.className='action-text';
-  count.textContent='♡';
-
-  group.append(like,count);
-  sidebar.append(group);
 
   const info=document.createElement('div');
-  info.className='info';
+  info.className='video-info';
 
-  const row=document.createElement('div');
-  row.className='channel-row';
+  const name=document.createElement('span');
+  name.textContent=item.name||'فيديو';
 
-  const name=channelName(item.name);
+  info.append(name);
+  section.append(video,error,info);
 
-  const avatar=document.createElement('div');
-  avatar.className='avatar';
-  avatar.textContent=name.charAt(0).toUpperCase();
-
-  const label=document.createElement('span');
-  label.className='channel-name';
-  label.textContent='@'+name;
-
-  const sub=document.createElement('button');
-  sub.className='subscribe-btn';
-  sub.textContent='اشتراك';
-
-  sub.onclick=e=>{
-    e.stopPropagation();
-    sub.textContent=sub.textContent==='اشتراك'?'مشترك':'اشتراك';
-  };
-
-  row.append(avatar,label,sub);
-  info.append(row);
-
-  const progressContainer=document.createElement('div');
-  progressContainer.className='video-progress-container';
-
-  const bar=document.createElement('div');
-  bar.className='video-progress-bar';
-  bar.id='progress_'+index;
-
-  progressContainer.append(bar);
-
-  section.append(video,error,sidebar,info,progressContainer);
   return section;
 }
 
-function openPlayer(index){
-  const feed=document.getElementById('feedContainer');
+function showError(section,error){
+  const box=section.querySelector('.error');
+  box.textContent='تعذر تشغيل الفيديو: '+error.message;
+  box.style.display='flex';
+}
 
-  if(feedObserver){
-    feedObserver.disconnect();
-    feedObserver=null;
+function openFeed(index){
+  const feed=$('feed');
+
+  if(observer){
+    observer.disconnect();
+    observer=null;
   }
 
   feed.replaceChildren();
 
   const back=document.createElement('button');
-  back.className='back-home-btn';
+  back.className='back';
   back.textContent='الرئيسية ✕';
-  back.onclick=returnToHome;
-
+  back.onclick=goHome;
   feed.append(back);
 
-  displayList.forEach((item,i)=>{
-    feed.append(createPlayerItem(item,i));
+  videosList.forEach((item,i)=>{
+    feed.append(createItem(item,i));
   });
 
-  document.getElementById('homeScreen').style.display='none';
-  document.getElementById('bottomNav').style.display='none';
+  $('home').style.display='none';
+  $('nav').style.display='none';
   feed.style.display='block';
 
-  setupObserver();
-  currentIndex=index;
-
-  requestAnimationFrame(()=>{
-    const target=feed.querySelector('.short-item[data-index="'+index+'"]');
-
-    if(target){
-      feed.scrollTop=target.offsetTop;
-      updateBuffer(index);
-    }
-  });
-}
-
-function returnToHome(){
-  document.querySelectorAll('#feedContainer video').forEach(video=>{
-    video.pause();
-  });
-
-  if(feedObserver){
-    feedObserver.disconnect();
-    feedObserver=null;
-  }
-
-  currentIndex=-1;
-
-  document.getElementById('feedContainer').style.display='none';
-  document.getElementById('homeScreen').style.display='flex';
-  document.getElementById('bottomNav').style.display='flex';
-}
-
-function updateBuffer(active){
-  if(!Number.isInteger(active)||active<0) return;
-
-  currentIndex=active;
-
-  document.querySelectorAll('.short-item').forEach((item,i)=>{
-    const video=item.querySelector('video');
-    if(!video) return;
-
-    if(i===active){
-      video.preload='auto';
-
-      if(video.paused){
-        const promise=video.play();
-        if(promise&&promise.catch){
-          promise.catch(error=>console.log('Play failed',error));
-        }
-      }
-    }else{
-      video.pause();
-      video.preload=Math.abs(i-active)<=1?'metadata':'none';
-    }
-  });
-}
-
-function togglePlay(video){
-  if(video.paused){
-    const promise=video.play();
-    if(promise&&promise.catch) promise.catch(console.log);
-  }else{
-    video.pause();
-  }
-}
-
-function updateProgress(video,index){
-  if(!video.duration||!Number.isFinite(video.duration)) return;
-
-  const bar=document.getElementById('progress_'+index);
-  if(bar){
-    bar.style.width=(video.currentTime/video.duration*100)+'%';
-  }
-}
-
-function setupObserver(){
-  const feed=document.getElementById('feedContainer');
-
-  feedObserver=new IntersectionObserver(entries=>{
+  observer=new IntersectionObserver(entries=>{
     const visible=entries
       .filter(e=>e.isIntersecting)
       .sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
 
     if(visible&&visible.intersectionRatio>=0.55){
-      updateBuffer(Number(visible.target.dataset.index));
+      activateVideo(Number(visible.target.dataset.index));
     }
   },{
     root:feed,
-    threshold:[0.35,0.55,0.75]
+    threshold:[0.3,0.55,0.8]
   });
 
-  feed.querySelectorAll('.short-item').forEach(item=>{
-    feedObserver.observe(item);
+  feed.querySelectorAll('.item').forEach(item=>{
+    observer.observe(item);
+  });
+
+  requestAnimationFrame(()=>{
+    const target=feed.querySelector('[data-index="'+index+'"]');
+    if(target){
+      feed.scrollTop=target.offsetTop;
+      activateVideo(index);
+    }
   });
 }
 
-function handleNavClick(action,button){
-  document.querySelectorAll('.nav-item').forEach(item=>{
-    item.classList.remove('active');
+function activateVideo(index){
+  if(index<0||index>=videosList.length)return;
+
+  activeIndex=index;
+
+  document.querySelectorAll('.item').forEach((section,i)=>{
+    const video=section.querySelector('video');
+
+    if(i===index){
+      loadVideo(video);
+
+      video.play().catch(error=>{
+        console.log('Playback requires user interaction:',error);
+      });
+
+    }else{
+      video.pause();
+
+      // نحتفظ بالفيديو المجاور فقط لتخفيف تحميل الملفات
+      if(Math.abs(i-index)>1){
+        video.removeAttribute('src');
+        video.dataset.loaded='false';
+        video.load();
+      }
+    }
+
+    if(Math.abs(i-index)===1){
+      loadVideo(video);
+    }
+  });
+}
+
+function loadVideo(video){
+  if(video.dataset.loaded==='true')return;
+
+  try{
+    const url=safeVideoUrl(video.dataset.path);
+
+    if(!url){
+      throw new Error('مسار الفيديو غير صالح');
+    }
+
+    video.src=url;
+    video.dataset.loaded='true';
+    video.preload='auto';
+    video.load();
+
+  }catch(error){
+    const section=video.closest('.item');
+    showError(section,error);
+  }
+}
+
+function goHome(){
+  if(observer){
+    observer.disconnect();
+    observer=null;
+  }
+
+  document.querySelectorAll('#feed video').forEach(video=>{
+    video.pause();
   });
 
-  button.classList.add('active');
+  activeIndex=-1;
 
-  if(action==='home') returnToHome();
+  $('feed').style.display='none';
+  $('home').style.display='flex';
+  $('nav').style.display='flex';
+}
 
-  if(action==='shuffle'){
-    displayList=[...displayList].sort(()=>Math.random()-0.5);
-    renderHomeGrid();
-  }
-
-  if(action==='refresh'&&window.AndroidBridge){
-    window.AndroidBridge.checkSavedFolder();
-  }
+function shuffleVideos(){
+  videosList=[...videosList].sort(()=>Math.random()-0.5);
+  renderGrid();
 }
 
 window.handleAndroidBack=function(){
-  if(document.getElementById('feedContainer').style.display==='block'){
-    returnToHome();
+  if($('feed').style.display==='block'){
+    goHome();
     return true;
   }
-
   return false;
 };
 </script>
+
 </body>
 </html>
