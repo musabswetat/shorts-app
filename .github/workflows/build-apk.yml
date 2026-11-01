@@ -47,51 +47,81 @@ jobs:
               > capacitor.config.json
           fi
 
-      - name: Prepare Android
+      - name: Prepare Android & Inject Native Folder Picker
         run: |
           if [ ! -d android ]; then
             npx cap add android
           fi
 
-      - name: Inject Auto-Media Bridge into Android
-        run: |
-          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST_PATH" ]; then
-            sed -i '/<uses-permission android:name="android.permission.INTERNET"/a \    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />' "$MANIFEST_PATH"
-          fi
-
+          # حقن كود مدير المجلدات Android Directory Picker في MainActivity.java
           FOUND_ACTIVITY=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           if [ -f "$FOUND_ACTIVITY" ]; then
             cat << 'JAVA_EOF' > "$FOUND_ACTIVITY"
           package com.shorts.app.v2;
 
-          import android.Manifest;
-          import android.content.pm.PackageManager;
-          import android.database.Cursor;
+          import android.content.Intent;
           import android.net.Uri;
           import android.os.Bundle;
-          import android.provider.MediaStore;
           import android.webkit.JavascriptInterface;
-          import android.webkit.WebView;
-          import androidx.core.app.ActivityCompat;
-          import androidx.core.content.ContextCompat;
+          import androidx.activity.result.ActivityResultLauncher;
+          import androidx.activity.result.contract.ActivityResultContracts;
+          import androidx.documentfile.provider.DocumentFile;
           import com.getcapacitor.BridgeActivity;
           import org.json.JSONArray;
           import org.json.JSONObject;
-          import java.io.File;
 
           public class MainActivity extends BridgeActivity {
+              private ActivityResultLauncher<Intent> folderPickerLauncher;
+
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) != PackageManager.PERMISSION_GRANTED &&
-                      ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                      ActivityCompat.requestPermissions(this, new String[]{
-                          Manifest.permission.READ_MEDIA_VIDEO,
-                          Manifest.permission.READ_EXTERNAL_STORAGE
-                      }, 101);
+
+                  folderPickerLauncher = registerForActivityResult(
+                      new ActivityResultContracts.StartActivityForResult(),
+                      result -> {
+                          if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                              Uri treeUri = result.getData().getData();
+                              if (treeUri != null) {
+                                  getContentResolver().takePersistableUriPermission(treeUri,
+                                      Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                                  
+                                  String jsonVideos = getVideosFromTreeUri(treeUri);
+                                  bridge.getWebView().evaluateJavascript("javascript:onFolderSelected(" + jsonVideos + ")", null);
+                              }
+                          }
+                      }
+                  );
+
+                  bridge.getWebView().addJavascriptInterface(new WebAppInterface(this), "AndroidBridge");
+              }
+
+              public void openFolderPicker() {
+                  Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                  folderPickerLauncher.launch(intent);
+              }
+
+              private String getVideosFromTreeUri(Uri treeUri) {
+                  JSONArray jsonArray = new JSONArray();
+                  try {
+                      DocumentFile pickedDir = DocumentFile.fromTreeUri(this, treeUri);
+                      if (pickedDir != null && pickedDir.isDirectory()) {
+                          for (DocumentFile file : pickedDir.listFiles()) {
+                              if (file.isFile() && file.getName() != null) {
+                                  String name = file.getName().toLowerCase();
+                                  if (name.endsWith(".mp4") || name.endsWith(".mkv") || name.endsWith(".webm") || name.endsWith(".mov")) {
+                                      JSONObject obj = new JSONObject();
+                                      obj.put("name", file.getName());
+                                      obj.put("path", file.getUri().toString());
+                                      jsonArray.put(obj);
+                                  }
+                              }
+                          }
+                      }
+                  } catch (Exception e) {
+                      e.printStackTrace();
                   }
-                  this.bridge.getWebView().addJavascriptInterface(new WebAppInterface(this), "AndroidBridge");
+                  return jsonArray.toString();
               }
 
               public class WebAppInterface {
@@ -99,32 +129,8 @@ jobs:
                   WebAppInterface(MainActivity c) { mContext = c; }
 
                   @JavascriptInterface
-                  public String getVideos() {
-                      JSONArray jsonArray = new JSONArray();
-                      try {
-                          Uri uri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
-                          String[] projection = {MediaStore.Video.Media.DATA, MediaStore.Video.Media.DISPLAY_NAME, MediaStore.Video.Media.DATE_ADDED};
-                          Cursor cursor = mContext.getContentResolver().query(uri, projection, null, null, MediaStore.Video.Media.DATE_ADDED + " DESC");
-                          if (cursor != null) {
-                              int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA);
-                              int nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME);
-                              while (cursor.moveToNext() && jsonArray.length() < 30) {
-                                  String filePath = cursor.getString(dataColumn);
-                                  String fileName = cursor.getString(nameColumn);
-                                  File file = new File(filePath);
-                                  if (file.exists()) {
-                                      JSONObject obj = new JSONObject();
-                                      obj.put("name", fileName);
-                                      obj.put("path", Uri.fromFile(file).toString());
-                                      jsonArray.put(obj);
-                                  }
-                              }
-                              cursor.close();
-                          }
-                      } catch (Exception e) {
-                          e.printStackTrace();
-                      }
-                      return jsonArray.toString();
+                  public void selectFolder() {
+                      runOnUiThread(() -> openFolderPicker());
                   }
               }
           }
