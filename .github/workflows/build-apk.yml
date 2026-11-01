@@ -53,7 +53,13 @@ jobs:
             npx cap add android
           fi
 
-          # حقن كود مدير المجلدات Android Directory Picker في MainActivity.java
+          # إضافة مكتبة DocumentFile إلى build.gradle الخاص بأندرويد لتجنب خطأ الترتيب
+          GRADLE_PATH="android/app/build.gradle"
+          if [ -f "$GRADLE_PATH" ]; then
+            sed -i '/dependencies {/a \    implementation "androidx.documentfile:documentfile:1.0.0"' "$GRADLE_PATH"
+          fi
+
+          # حقن كود MainActivity.java الخاص باختيار المجلدات
           FOUND_ACTIVITY=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           if [ -f "$FOUND_ACTIVITY" ]; then
             cat << 'JAVA_EOF' > "$FOUND_ACTIVITY"
