@@ -27,7 +27,7 @@
         #progressBarFill { width: 0%; height: 100%; background: #ff0000; transition: width 0.1s linear; }
         #statusText { font-size: 12px; color: #aaa; margin-top: 5px; }
 
-        /* الصفحة الرئيسية بتخطيط عمودي سليم ومنظم منعاً لأي تداخل */
+        /* الصفحة الرئيسية */
         #homeScreen {
             position: fixed; inset: 0; background: #0f0f0f; display: none; flex-direction: column; z-index: 100;
         }
@@ -41,7 +41,6 @@
             padding-bottom: 90px; -webkit-overflow-scrolling: touch; align-items: center;
         }
         
-        /* بطاقة الفيديو بتخطيط عمودي مستقل تماماً */
         .short-card {
             background: #1a1a1a; border-radius: 16px; overflow: hidden; cursor: pointer;
             width: 100%; max-width: 340px; height: 480px; display: flex; flex-direction: column; position: relative;
@@ -116,10 +115,11 @@
     <div id="welcomeScreen">
         <div class="welcome-box">
             <h2 id="welcomeTitle" style="font-size: 18px; font-weight: bold;">YouTube Shorts</h2>
-            <p id="welcomeDesc" style="font-size: 13px; color: #aaa;">اختر مجلد الفيديوهات لبدء التشغيل</p>
+            <p id="welcomeDesc" style="font-size: 13px; color: #aaa;">اختر فيديوهات الشورتس لبدء التشغيل</p>
             
-            <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
-            <button class="select-btn" id="selectBtn" onclick="document.getElementById('folderInput').click()">اختر المجلد</button>
+            <!-- تم تعديل الخيار هنا ليقبل اختيار الفيديوهات مباشرة ودون مشاكل في أندرويد -->
+            <input type="file" id="folderInput" multiple accept="video/*" style="display: none;">
+            <button class="select-btn" id="selectBtn" onclick="document.getElementById('folderInput').click()">اختر الفيديوهات</button>
 
             <div id="progressContainer">
                 <div id="progressBarFill"></div>
@@ -175,7 +175,7 @@
             const rawVideos = files.filter(file => file.type.startsWith('video/') || /\.(mp4|mkv|webm|mov)$/i.test(file.name));
 
             if (rawVideos.length === 0) {
-                alert('لم يتم العثور على فيديوهات في المجلد!');
+                alert('لم يتم العثور على فيديوهات!');
                 return;
             }
 
@@ -304,115 +304,4 @@
                     </div>
 
                     <div class="video-progress-container">
-                        <div class="video-progress-bar" id="progress_${index}"></div>
-                    </div>
-                `;
-                container.appendChild(item);
-            });
-
-            setupObserver();
-            updateBuffer(0);
-        }
-
-        function updateBuffer(activeIdx) {
-            currentIndex = activeIdx;
-            const items = document.querySelectorAll('.short-item');
-
-            items.forEach((item, index) => {
-                const video = item.querySelector('video');
-                
-                if (index >= currentIndex - 1 && index <= currentIndex + PRELOAD_COUNT) {
-                    if (!video.src || video.src === window.location.href) {
-                        video.src = displayUrls[index];
-                        video.load();
-                    }
-                    if (index === currentIndex) {
-                        video.play().catch(e => console.log("Auto-play blocked"));
-                    } else {
-                        video.pause();
-                        video.currentTime = 0;
-                    }
-                } else {
-                    if (index < currentIndex - 2 || index > currentIndex + PRELOAD_COUNT + 1) {
-                        if (video.src && video.src !== window.location.href) {
-                            video.pause();
-                            video.src = "";
-                            video.load();
-                        }
-                    }
-                }
-            });
-        }
-
-        function togglePlay(video) {
-            if (video.paused) video.play();
-            else video.pause();
-        }
-
-        function handleLike(index) {
-            const btn = document.getElementById(`likeBtn_${index}`);
-            const countSpan = document.getElementById(`likeCount_${index}`);
-            let currentLikes = parseInt(countSpan.innerText);
-
-            btn.classList.toggle('liked');
-            btn.classList.add('animate-pop');
-            setTimeout(() => btn.classList.remove('animate-pop'), 300);
-
-            if (btn.classList.contains('liked')) {
-                countSpan.innerText = currentLikes + 1;
-            } else {
-                countSpan.innerText = currentLikes - 1;
-            }
-        }
-
-        function updateProgress(video, index) {
-            if (!video.duration) return;
-            const progress = document.getElementById(`progress_${index}`);
-            const percent = (video.currentTime / video.duration) * 100;
-            progress.style.width = percent + '%';
-        }
-
-        function shareVideo(filename) {
-            if (navigator.share) {
-                navigator.share({ title: filename, url: window.location.href });
-            } else {
-                alert('تم نسخ اسم الفيديو: ' + filename);
-            }
-        }
-
-        function handleNavClick(index, action) {
-            const navItems = document.querySelectorAll('.nav-item');
-            navItems.forEach(item => item.classList.remove('active'));
-            navItems[index].classList.add('active');
-
-            if (action === 'refresh' || action === 'add') {
-                return;
-            }
-
-            if (action === 'home') {
-                returnToHome();
-            } else if (action === 'shuffle') {
-                generateSmartFeed();
-                if (document.getElementById('feedContainer').style.display === 'block') {
-                    renderPlayerFeed();
-                } else {
-                    renderHomeGrid();
-                }
-            }
-        }
-
-        function setupObserver() {
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const index = parseInt(entry.target.dataset.index);
-                        updateBuffer(index);
-                    }
-                });
-            }, { threshold: 0.7 });
-
-            document.querySelectorAll('.short-item').forEach(item => observer.observe(item));
-        }
-    </script>
-</body>
-</html>
+                        <div class="video-progress-bar" id
