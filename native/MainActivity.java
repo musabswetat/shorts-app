@@ -15,7 +15,6 @@ import com.getcapacitor.BridgeActivity;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -27,7 +26,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends BridgeActivity {
-
     private static final String TAG = "ShortsApp";
     private static final int REQUEST_FOLDER = 7314;
     private static final String PREFS = "ShortsSettings";
@@ -39,7 +37,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         if (getBridge() != null &&
                 getBridge().getWebView() != null) {
 
@@ -51,7 +48,6 @@ public class MainActivity extends BridgeActivity {
     }
 
     public class AndroidBridge {
-
         @JavascriptInterface
         public void selectFolder() {
             runOnUiThread(() -> {
@@ -64,7 +60,6 @@ public class MainActivity extends BridgeActivity {
                             Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION |
                             Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
                     );
-
                     startActivityForResult(intent, REQUEST_FOLDER);
 
                 } catch (Exception e) {
@@ -78,7 +73,6 @@ public class MainActivity extends BridgeActivity {
         public void checkSavedFolder() {
             SharedPreferences prefs =
                     getSharedPreferences(PREFS, MODE_PRIVATE);
-
             String saved =
                     prefs.getString(FOLDER_KEY, null);
 
@@ -113,7 +107,6 @@ public class MainActivity extends BridgeActivity {
         }
 
         Uri treeUri = data.getData();
-
         if (treeUri == null) {
             notifyError("تعذر الحصول على المجلد.");
             return;
@@ -128,7 +121,6 @@ public class MainActivity extends BridgeActivity {
                     treeUri,
                     flags
             );
-
             getSharedPreferences(PREFS, MODE_PRIVATE)
                     .edit()
                     .putString(FOLDER_KEY, treeUri.toString())
@@ -157,7 +149,6 @@ public class MainActivity extends BridgeActivity {
 
                 String rootId =
                         DocumentsContract.getTreeDocumentId(treeUri);
-
                 collectVideos(
                         treeUri,
                         rootId,
@@ -173,7 +164,6 @@ public class MainActivity extends BridgeActivity {
                 }
 
                 notifyVideos(result);
-
             } catch (Exception e) {
                 Log.e(TAG, "Folder scanning failed", e);
 
@@ -198,7 +188,6 @@ public class MainActivity extends BridgeActivity {
                         treeUri,
                         parentId
                 );
-
         String[] projection = {
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID,
                 DocumentsContract.Document.COLUMN_DISPLAY_NAME,
@@ -206,7 +195,6 @@ public class MainActivity extends BridgeActivity {
         };
 
         List<String[]> documents = new ArrayList<>();
-
         try (Cursor cursor = getContentResolver().query(
                 childrenUri,
                 projection,
@@ -221,7 +209,6 @@ public class MainActivity extends BridgeActivity {
             int idCol = cursor.getColumnIndexOrThrow(
                     DocumentsContract.Document.COLUMN_DOCUMENT_ID
             );
-
             int nameCol = cursor.getColumnIndexOrThrow(
                     DocumentsContract.Document.COLUMN_DISPLAY_NAME
             );
@@ -229,7 +216,6 @@ public class MainActivity extends BridgeActivity {
             int mimeCol = cursor.getColumnIndexOrThrow(
                     DocumentsContract.Document.COLUMN_MIME_TYPE
             );
-
             while (cursor.moveToNext()) {
                 documents.add(new String[]{
                         cursor.getString(idCol),
@@ -243,7 +229,6 @@ public class MainActivity extends BridgeActivity {
             String id = document[0];
             String name = document[1] == null ?
                     "video.mp4" : document[1];
-
             String mime = document[2] == null ?
                     "" : document[2];
 
@@ -256,7 +241,6 @@ public class MainActivity extends BridgeActivity {
                 );
                 continue;
             }
-
             if (isSupportedVideo(name)) {
                 copyVideo(
                         treeUri,
@@ -271,7 +255,6 @@ public class MainActivity extends BridgeActivity {
 
     private boolean isSupportedVideo(String name) {
         String lower = name.toLowerCase(Locale.ROOT);
-
         return lower.endsWith(".mp4") ||
                 lower.endsWith(".m4v") ||
                 lower.endsWith(".3gp") ||
@@ -294,7 +277,6 @@ public class MainActivity extends BridgeActivity {
 
         String extension = ".mp4";
         int dot = originalName.lastIndexOf('.');
-
         if (dot >= 0) {
             extension = originalName.substring(dot).toLowerCase(Locale.ROOT);
         }
@@ -307,7 +289,6 @@ public class MainActivity extends BridgeActivity {
         try (
                 InputStream input =
                         getContentResolver().openInputStream(documentUri);
-
                 FileOutputStream output =
                         new FileOutputStream(destination)
         ) {
@@ -326,7 +307,6 @@ public class MainActivity extends BridgeActivity {
             output.flush();
 
             long size = destination.length();
-
             if (size <= 0) {
                 destination.delete();
                 return;
@@ -342,7 +322,6 @@ public class MainActivity extends BridgeActivity {
             Log.i(TAG,
                     "Copied: " + originalName +
                     " bytes=" + size);
-
         } catch (Exception e) {
             Log.e(TAG, "Copy failed: " + originalName, e);
             destination.delete();
@@ -364,7 +343,6 @@ public class MainActivity extends BridgeActivity {
             if (file.isDirectory()) {
                 deleteContents(file);
             }
-
             file.delete();
         }
     }
@@ -380,7 +358,6 @@ public class MainActivity extends BridgeActivity {
                                 ");",
                         null
                 );
-
             } catch (Exception e) {
                 Log.e(TAG, "Send videos failed", e);
             }
@@ -393,7 +370,6 @@ public class MainActivity extends BridgeActivity {
                 WebView webView = getBridge().getWebView();
 
                 String safeMessage = JSONObject.quote(message);
-
                 webView.evaluateJavascript(
                         "window.onFolderError(" +
                                 safeMessage +
@@ -408,7 +384,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onDestroy() {
+    public void onDestroy() {
         executor.shutdown();
         super.onDestroy();
     }
