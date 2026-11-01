@@ -13,52 +13,57 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
+    - name: Clean Windows node_modules
+      run: rm -rf node_modules package-lock.json
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '22'
 
-    - name: Setup Project Structure & Capacitor
+    - name: Prepare Project Structure
       run: |
         mkdir -p public
         if [ -f "index.html" ]; then
           mv index.html public/
         fi
-
-        # إنشاء ملف package.json تلقائياً
-        cat << 'EOF' > package.json
-        {
-          "name": "shorts-app",
-          "version": "1.0.0",
-          "private": true,
-          "dependencies": {
-            "@capacitor/core": "^6.0.0",
-            "@capacitor/android": "^6.0.0"
-          },
-          "devDependencies": {
-            "@capacitor/cli": "^6.0.0"
+        if [ ! -f "package.json" ]; then
+          cat << 'EOF' > package.json
+          {
+            "name": "shorts-app-v2",
+            "version": "1.0.0",
+            "private": true,
+            "dependencies": {
+              "@capacitor/core": "^6.0.0",
+              "@capacitor/android": "^6.0.0"
+            },
+            "devDependencies": {
+              "@capacitor/cli": "^6.0.0"
+            }
           }
-        }
-        EOF
+          EOF
+        fi
+        if [ ! -f "capacitor.config.json" ]; then
+          cat << 'EOF' > capacitor.config.json
+          {
+            "appId": "com.shorts.app.v2",
+            "appName": "YouTube Shorts V2",
+            "webDir": "public"
+          }
+          EOF
+        fi
 
-        # إنشاء ملف إعدادات كاباسيتور
-        cat << 'EOF' > capacitor.config.json
-        {
-          "appId": "com.shorts.app",
-          "appName": "YouTube Shorts",
-          "webDir": "public"
-        }
-        EOF
+    - name: Install npm dependencies
+      run: npm install
 
-        npm install
-        npx cap add android
-        npx cap sync android
+    - name: Sync Capacitor Android
+      run: npx cap sync android
 
     - name: Setup Java JDK
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '17'
+        java-version: '21'
 
     - name: Build APK with Gradle
       run: |
@@ -69,5 +74,5 @@ jobs:
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: my-android-app
+        name: my-android-app-v2
         path: android/app/build/outputs/apk/debug/app-debug.apk
