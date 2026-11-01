@@ -144,6 +144,14 @@
             }
         }
 
+        // دالة تحويل مسار الملف ليعمل بسلاسة داخل WebView عبر Capacitor
+        function getSafeVideoUrl(rawPath) {
+            if (window.Capacitor && typeof window.Capacitor.convertFileSrc === 'function') {
+                return window.Capacitor.convertFileSrc(rawPath);
+            }
+            return rawPath;
+        }
+
         window.onFolderSelected = function(videos) {
             if (!videos || videos.length === 0) {
                 return;
@@ -161,12 +169,13 @@
             displayList.forEach((item, index) => {
                 const nameWithoutExt = item.name.substring(0, item.name.lastIndexOf('.')) || item.name;
                 const channelName = nameWithoutExt.split('_')[0] || 'قناة';
+                const safeUrl = getSafeVideoUrl(item.path);
 
                 const card = document.createElement('div');
                 card.className = 'short-card';
                 card.onclick = () => openPlayer(index);
                 card.innerHTML = `
-                    <video src="${item.path}" preload="metadata" muted playsinline></video>
+                    <video src="${safeUrl}" preload="metadata" muted playsinline></video>
                     <div class="card-overlay">
                         <span>@${channelName}</span>
                     </div>
@@ -199,13 +208,14 @@
             displayList.forEach((item, index) => {
                 const nameWithoutExt = item.name.substring(0, item.name.lastIndexOf('.')) || item.name;
                 const channelName = nameWithoutExt.split('_')[0] || 'قناة';
+                const safeUrl = getSafeVideoUrl(item.path);
 
                 const div = document.createElement('div');
                 div.className = 'short-item';
                 div.dataset.index = index;
                 div.innerHTML = `
                     <video loop playsinline preload="auto" onclick="togglePlay(this)" ontimeupdate="updateProgress(this, ${index})">
-                        <source src="${item.path}" type="video/mp4">
+                        <source src="${safeUrl}" type="video/mp4">
                     </video>
                     <div class="sidebar">
                         <div class="action-group">
