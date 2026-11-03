@@ -1,11 +1,10 @@
-
 name: Build Shorts Android APK
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main, master]
+
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,302 +14,127 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Verify files
+      - name: Prepare Capacitor Android project
+        shell: bash
         run: |
+          set -euo pipefail
+
           test -f index.html
           test -f native/MainActivity.java
+          test -f native/PlayerActivity.java
 
-      - name: Prepare web assets
-        run: |
           mkdir -p public
           cp index.html public/index.html
 
-      - name: Install Capacitor
-        run: |
-          npm init -y
-          npm install @capacitor/core@6.2.0 @capacitor/cli@6.2.0 @capacitor/android@6.2.0
+          if [ ! -f package.json ]; then
+            npm init -y
+          fi
 
-      - name: Create Capacitor config
-        run: |
-          cat > capacitor.config.json <<'EOF'
+          npm install @capacitor/core@^6 @capacitor/android@^6
+          npm install --save-dev @capacitor/cli@^6
+
+          cat > capacitor.config.json <<'JSON'
           {
             "appId": "com.shorts.app.v2",
             "appName": "Shorts App",
-            "webDir": "public",
-            "server": {
-              "androidScheme": "https"
-            }
+            "webDir": "public"
           }
-          EOF
+          JSON
 
-      - name: Add Android
-        run: |
-          npx cap add android
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
 
-      - name: Install MainActivity
-        run: |
-          mkdir -p android/app/src/main/java/com/shorts/app/v2
-          cp native/MainActivity.java android/app/src/main/java/com/shorts/app/v2/MainActivity.java
-
-      - name: Fix Capacitor video Range handling
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("node_modules/@capacitor/android/capacitor/src/main/java/com/getcapacitor/WebViewLocalServer.java")
-
-          source = path.read_text()
-
-          method_start = source.index(
-              "private WebResourceResponse handleLocalRequest("
-          )
-
-          range_start = source.index(
-              "        if (request.getRequestHeaders().get(\"Range\") != null) {",
-              method_start
-          )
-
-          next_block = source.index(
-              "        if (isLocalFile(request.getUrl()) || isErrorUrl(request.getUrl())) {",
-              range_start
-          )
-
-          replacement = r'''        String rangeHeader = request.getRequestHeaders().get("Range");
-
-                  if (rangeHeader != null && isLocalFile(request.getUrl())) {
-                      InputStream rawStream = new LollipopLazyInputStream(handler, request);
-
-                      try {
-                          long totalLength = rawStream.available();
-
-                          java.util.regex.Matcher matcher =
-                              java.util.regex.Pattern.compile("(?i)^bytes=(\\d*)-(\\d*)$")
-                                  .matcher(rangeHeader.trim());
-
-                          if (!matcher.matches() || totalLength <= 0) {
-                              Map<String, String> headers = new HashMap<>();
-                              headers.put("Content-Range", "bytes */" + totalLength);
-                              headers.put("Content-Length", "0");
-
-                              return new WebResourceResponse(
-                                  getMimeType(path, rawStream),
-                                  null,
-                                  416,
-                                  "Range Not Satisfiable",
-                                  headers,
-                                  new java.io.ByteArrayInputStream(new byte[0])
-                              );
-                          }
-
-                          String startText = matcher.group(1);
-                          String endText = matcher.group(2);
-
-                          long start;
-                          long end;
-
-                          if (startText.isEmpty()) {
-                              long suffixLength = Long.parseLong(endText);
-                              start = Math.max(0, totalLength - suffixLength);
-                              end = totalLength - 1;
-                          } else {
-                              start = Long.parseLong(startText);
-                              end = endText.isEmpty()
-                                  ? totalLength - 1
-                                  : Long.parseLong(endText);
-                          }
-
-                          if (start >= totalLength || start < 0 || end < start) {
-                              Map<String, String> headers = new HashMap<>();
-                              headers.put("Content-Range", "bytes */" + totalLength);
-                              headers.put("Content-Length", "0");
-
-                              return new WebResourceResponse(
-                                  getMimeType(path, rawStream),
-                                  null,
-                                  416,
-                                  "Range Not Satisfiable",
-                                  headers,
-                                  new java.io.ByteArrayInputStream(new byte[0])
-                              );
-                          }
-
-                          end = Math.min(end, totalLength - 1);
-
-                          long skipped = 0;
-
-                          while (skipped < start) {
-                              long amount = rawStream.skip(start - skipped);
-
-                              if (amount <= 0) {
-                                  if (rawStream.read() == -1) {
-                                      break;
-                                  }
-                                  amount = 1;
-                              }
-
-                              skipped += amount;
-                          }
-
-                          if (skipped != start) {
-                              throw new IOException("Unable to seek to requested video range");
-                          }
-
-                          final long requestedLength = end - start + 1;
-
-                          InputStream limitedStream = new java.io.FilterInputStream(rawStream) {
-                              private long remaining = requestedLength;
-
-                              @Override
-                              public int read() throws IOException {
-                                  if (remaining <= 0) {
-                                      return -1;
-                                  }
-
-                                  int value = super.read();
-
-                                  if (value != -1) {
-                                      remaining--;
-                                  }
-
-                                  return value;
-                              }
-
-                              @Override
-                              public int read(byte[] buffer, int offset, int length)
-                                      throws IOException {
-                                  if (remaining <= 0) {
-                                      return -1;
-                                  }
-
-                                  int allowed = (int) Math.min((long) length, remaining);
-                                  int count = super.read(buffer, offset, allowed);
-
-                                  if (count > 0) {
-                                      remaining -= count;
-                                  }
-
-                                  return count;
-                              }
-
-                              @Override
-                              public long skip(long amount) throws IOException {
-                                  long skippedBytes = super.skip(
-                                      Math.min(amount, remaining)
-                                  );
-
-                                  remaining -= skippedBytes;
-                                  return skippedBytes;
-                              }
-
-                              @Override
-                              public int available() throws IOException {
-                                  return (int) Math.min(
-                                      (long) super.available(),
-                                      remaining
-                                  );
-                              }
-                          };
-
-                          Map<String, String> headers = new HashMap<>();
-                          headers.put("Accept-Ranges", "bytes");
-                          headers.put(
-                              "Content-Range",
-                              "bytes " + start + "-" + end + "/" + totalLength
-                          );
-                          headers.put("Content-Length", String.valueOf(requestedLength));
-                          headers.put("Cache-Control", "no-cache");
-
-                          return new WebResourceResponse(
-                              getMimeType(path, rawStream),
-                              null,
-                              206,
-                              "Partial Content",
-                              headers,
-                              limitedStream
-                          );
-
-                      } catch (Exception e) {
-                          Logger.error("Video range handling failed", e);
-
-                          Map<String, String> headers = new HashMap<>();
-                          headers.put("Content-Length", "0");
-
-                          return new WebResourceResponse(
-                              "video/mp4",
-                              null,
-                              500,
-                              "Internal Server Error",
-                              headers,
-                              new java.io.ByteArrayInputStream(new byte[0])
-                          );
-                      }
-                  }
-
-                  if (rangeHeader != null) {
-                      InputStream responseStream = new LollipopLazyInputStream(handler, request);
-                      String mimeType = getMimeType(path, responseStream);
-                      Map<String, String> tempResponseHeaders = handler.getResponseHeaders();
-                      int statusCode = 206;
-
-                      try {
-                          int totalRange = responseStream.available();
-                          String[] parts = rangeHeader.split("=");
-                          String[] streamParts = parts[1].split("-");
-                          String fromRange = streamParts[0];
-                          int range = totalRange - 1;
-
-                          if (streamParts.length > 1) {
-                              range = Integer.parseInt(streamParts[1]);
-                          }
-
-                          tempResponseHeaders.put("Accept-Ranges", "bytes");
-                          tempResponseHeaders.put(
-                              "Content-Range",
-                              "bytes " + fromRange + "-" + range + "/" + totalRange
-                          );
-                      } catch (IOException e) {
-                          statusCode = 404;
-                      }
-
-                      return new WebResourceResponse(
-                          mimeType,
-                          handler.getEncoding(),
-                          statusCode,
-                          handler.getReasonPhrase(),
-                          tempResponseHeaders,
-                          responseStream
-                      );
-                  }
-
-          '''
-
-          source = source[:range_start] + replacement + source[next_block:]
-
-          path.write_text(source)
-
-          print("Capacitor video Range handling patched successfully.")
-          PY
-
-      - name: Sync Capacitor
-        run: |
           npx cap sync android
 
-      - name: Build APK
+      - name: Install native player and persistent library code
+        shell: bash
         run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          gradle = Path('android/app/build.gradle')
+          src = gradle.read_text(encoding='utf-8')
+
+          deps = [
+            'implementation "androidx.documentfile:documentfile:1.0.1"',
+            'implementation "androidx.media3:media3-exoplayer:1.5.1"',
+            'implementation "androidx.media3:media3-ui:1.5.1"'
+          ]
+
+          for dep in deps:
+            artifact = dep.split(':')[1]
+
+            if artifact not in src:
+              match = re.search(r'dependencies\s*\{', src)
+
+              if not match:
+                raise SystemExit(
+                  'Could not find dependencies block in app/build.gradle'
+                )
+
+              pos = match.end()
+              src = src[:pos] + '\n    ' + dep + src[pos:]
+
+          gradle.write_text(src, encoding='utf-8')
+
+          java_dir = Path(
+            'android/app/src/main/java/com/shorts/app/v2'
+          )
+
+          java_dir.mkdir(parents=True, exist_ok=True)
+
+          for name in ('MainActivity.java', 'PlayerActivity.java'):
+            (java_dir / name).write_text(
+              Path('native', name).read_text(encoding='utf-8'),
+              encoding='utf-8'
+            )
+
+          manifest = Path(
+            'android/app/src/main/AndroidManifest.xml'
+          )
+
+          xml = manifest.read_text(encoding='utf-8')
+
+          activity = (
+            '<activity '
+            'android:name="com.shorts.app.v2.PlayerActivity" '
+            'android:exported="false" '
+            'android:screenOrientation="unspecified" '
+            'android:theme="@android:style/Theme.Material.NoActionBar" />'
+          )
+
+          if 'com.shorts.app.v2.PlayerActivity' not in xml:
+            xml = xml.replace(
+              '</application>',
+              '        ' + activity + '\n    </application>'
+            )
+
+          manifest.write_text(xml, encoding='utf-8')
+          PY
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
@@ -318,6 +142,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Shorts-App-Fixed-APK
+          name: shorts-app-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
