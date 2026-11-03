@@ -1,0 +1,140 @@
+name: Build Shorts Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Verify source files
+        run: |
+          test -f index.html
+          test -f native/MainActivity.java
+          test -f native/PlayerActivity.java
+
+      - name: Prepare web assets
+        run: |
+          mkdir -p public
+          cp index.html public/index.html
+
+      - name: Install Capacitor
+        run: |
+          npm init -y
+          npm install @capacitor/core@6.2.0 @capacitor/cli@6.2.0 @capacitor/android@6.2.0
+
+      - name: Create Capacitor config
+        run: |
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "com.shorts.app.v2",
+            "appName": "Shorts",
+            "webDir": "public",
+            "server": {
+              "androidScheme": "https"
+            }
+          }
+          EOF
+
+      - name: Add Android
+        run: |
+          npx cap add android
+
+      - name: Install native activities
+        run: |
+          mkdir -p android/app/src/main/java/com/shorts/app/v2
+
+          cp native/MainActivity.java \
+            android/app/src/main/java/com/shorts/app/v2/MainActivity.java
+
+          cp native/PlayerActivity.java \
+            android/app/src/main/java/com/shorts/app/v2/PlayerActivity.java
+
+      - name: Add Media3 dependencies and register player
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          gradle = Path("android/app/build.gradle")
+          source = gradle.read_text()
+
+          start = source.find("dependencies {")
+
+          if start < 0:
+              raise SystemExit("Could not find dependencies block")
+
+          close = source.find("}", start)
+
+          if close < 0:
+              raise SystemExit("Could not find dependencies block end")
+
+          dependencies = """
+              implementation "androidx.media3:media3-exoplayer:1.4.1"
+              implementation "androidx.media3:media3-exoplayer-dash:1.4.1"
+              implementation "androidx.media3:media3-exoplayer-hls:1.4.1"
+              implementation "androidx.media3:media3-ui:1.4.1"
+          """
+
+          if "media3-exoplayer" not in source:
+              source = source[:close] + dependencies + source[close:]
+              gradle.write_text(source)
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          xml = manifest.read_text()
+
+          activity = """
+              <activity
+                  android:name="com.shorts.app.v2.PlayerActivity"
+                  android:exported="false"
+                  android:configChanges="orientation|screenSize|keyboardHidden"
+                  android:theme="@android:style/Theme.Material.NoActionBar" />
+          """
+
+          if "com.shorts.app.v2.PlayerActivity" not in xml:
+              position = xml.rfind("</application>")
+
+              if position < 0:
+                  raise SystemExit("Could not find application tag")
+
+              xml = xml[:position] + activity + xml[position:]
+              manifest.write_text(xml)
+
+          PY
+
+      - name: Sync Capacitor
+        run: |
+          npx cap sync android
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shorts-App-Fullscreen-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
