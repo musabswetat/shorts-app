@@ -1,8 +1,8 @@
 package com.shorts.app.v2;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
@@ -10,12 +10,10 @@ import android.os.Bundle;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
-import android.provider.DocumentsContract;
-import android.view.WindowManager;
 
-import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.documentfile.provider.DocumentFile;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -24,655 +22,698 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.InputStream;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends BridgeActivity {
 
     private static final String TAG = "ShortsApp";
-    private static final int REQUEST_FOLDER = 7314;
+    private static final String PREFS = "ShortsPersistentLibrary";
+    private static final String FOLDER_KEY = "saved_folder_uri";
+    private static final String CACHE_PREFIX = "videos_";
 
-    private static final String PREFS = "ShortsSettings";
-    private static final String FOLDER_KEY = "saved_folder";
-
-    private final ExecutorService executor =
+    private final ExecutorService importExecutor =
             Executors.newSingleThreadExecutor();
 
+    private ActivityResultLauncher<Intent> folderPicker;
+    private ActivityResultLauncher<Intent> playerLauncher;
+
+    private volatile boolean destroyed = false;
+
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public void onCreate(Bundle state) {
+        super.onCreate(state);
 
-        applyImmersiveMode();
+        hideSystemBars();
 
-        getWindow().addFlags(
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-        );
-
-        if (getBridge() != null &&
-                getBridge().getWebView() != null) {
-
+        if (getBridge() != null && getBridge().getWebView() != null) {
             getBridge().getWebView().addJavascriptInterface(
-                    new AndroidBridge(),
+                    new WebBridge(),
                     "AndroidBridge"
             );
         }
-    }
 
-    private void applyImmersiveMode() {
-
-        WindowCompat.setDecorFitsSystemWindows(
-                getWindow(),
-                false
-        );
-
-        WindowInsetsControllerCompat controller =
-                new WindowInsetsControllerCompat(
-                        getWindow(),
-                        getWindow().getDecorView()
-                );
-
-        controller.hide(
-                WindowInsetsCompat.Type.systemBars()
-        );
-
-        controller.setSystemBarsBehavior(
-                WindowInsetsControllerCompat
-                        .BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        );
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-
-        if (hasFocus) {
-            applyImmersiveMode();
-        }
-    }
-
-    public class AndroidBridge {
-
-        @JavascriptInterface
-        public void selectFolder() {
-
-            runOnUiThread(() -> {
-
-                try {
-                    Intent intent = new Intent(
-                            Intent.ACTION_OPEN_DOCUMENT_TREE
-                    );
-
-                    intent.addFlags(
-                            Intent.FLAG_GRANT_READ_URI_PERMISSION
-                                    | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
-                                    | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
-                    );
-
-                    startActivityForResult(
-                            intent,
-                            REQUEST_FOLDER
-                    );
-
-                } catch (Exception e) {
-
-                    Log.e(TAG, "Folder picker failed", e);
-
-                    notifyError(
-                            "تعذر فتح اختيار المجلد."
-                    );
-                }
-            });
-        }
-
-        @JavascriptInterface
-        public void checkSavedFolder() {
-
-            String saved = getSharedPreferences(
-                    PREFS,
-                    MODE_PRIVATE
-            ).getString(FOLDER_KEY, null);
-
-            if (saved == null || saved.isEmpty()) {
-                notifyError("اختر مجلد الفيديوهات للبدء.");
-                return;
-            }
-
-            try {
-                scanFolder(Uri.parse(saved));
-
-            } catch (Exception e) {
-
-                Log.e(TAG, "Saved folder error", e);
-
-                notifyError(
-                        "تعذر الوصول إلى المجلد المحفوظ. اختره مجدداً."
-                );
-            }
-        }
-
-        @JavascriptInterface
-        public void openPlayer(String videosJson, int startIndex) {
-
-            runOnUiThread(() -> {
-
-                try {
-                    JSONArray array = new JSONArray(videosJson);
-
-                    ArrayList<String> paths = new ArrayList<>();
-                    ArrayList<String> names = new ArrayList<>();
-
-                    for (int i = 0; i < array.length(); i++) {
-
-                        JSONObject item = array.getJSONObject(i);
-
-                        paths.add(item.getString("path"));
-
-                        names.add(
-                                item.optString("name", "فيديو")
-                        );
-                    }
-
-                    if (paths.isEmpty()) {
+        folderPicker = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() != RESULT_OK ||
+                            result.getData() == null) {
                         return;
                     }
 
-                    Intent intent = new Intent(
-                            MainActivity.this,
-                            PlayerActivity.class
-                    );
+                    Intent data = result.getData();
+                    Uri tree = data.getData();
 
-                    intent.putStringArrayListExtra(
-                            PlayerActivity.EXTRA_PATHS,
-                            paths
-                    );
+                    if (tree == null) {
+                        sendError("لم يتم اختيار مجلد صالح.");
+                        return;
+                    }
 
-                    intent.putStringArrayListExtra(
-                            PlayerActivity.EXTRA_NAMES,
-                            names
-                    );
+                    int flags = data.getFlags() &
+                            (Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                             Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 
-                    intent.putExtra(
-                            PlayerActivity.EXTRA_INDEX,
-                            Math.max(
-                                    0,
-                                    Math.min(startIndex, paths.size() - 1)
-                            )
-                    );
+                    try {
+                        if ((flags & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0) {
+                            getContentResolver().takePersistableUriPermission(
+                                    tree,
+                                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            );
+                        } else {
+                            getContentResolver().takePersistableUriPermission(
+                                    tree,
+                                    flags
+                            );
+                        }
 
-                    startActivity(intent);
+                        SharedPreferences prefs =
+                                getSharedPreferences(PREFS, MODE_PRIVATE);
 
-                } catch (Exception e) {
+                        prefs.edit()
+                                .putString(FOLDER_KEY, tree.toString())
+                                .apply();
 
-                    Log.e(TAG, "Open player failed", e);
+                        beginImport(tree);
 
-                    notifyError("تعذر فتح مشغل الفيديو.");
+                    } catch (Exception e) {
+                        Log.e(TAG, "Unable to persist folder access", e);
+                        sendError(
+                                "لم يتمكن أندرويد من حفظ إذن المجلد. حاول اختيار مجلد آخر."
+                        );
+                    }
                 }
-            });
-        }
-    }
-
-    @Override
-    protected void onActivityResult(
-            int requestCode,
-            int resultCode,
-            Intent data
-    ) {
-
-        super.onActivityResult(
-                requestCode,
-                resultCode,
-                data
         );
 
-        if (requestCode != REQUEST_FOLDER) {
-            return;
-        }
+        playerLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    WebView web = getWebViewSafe();
 
-        if (resultCode != RESULT_OK || data == null) {
-            notifyError("لم يتم اختيار مجلد.");
-            return;
-        }
+                    if (web != null) {
+                        String js =
+                                result.getResultCode() == Activity.RESULT_FIRST_USER
+                                ? "window.returnFromNativePlayer && window.returnFromNativePlayer(); window.reloadFolder && window.reloadFolder();"
+                                : "window.returnFromNativePlayer && window.returnFromNativePlayer();";
 
-        Uri treeUri = data.getData();
+                        web.evaluateJavascript(js, null);
+                    }
+                }
+        );
+    }
 
-        if (treeUri == null) {
-            notifyError("تعذر الحصول على المجلد.");
-            return;
-        }
-
+    private void hideSystemBars() {
         try {
-
-            int flags = data.getFlags() &
-                    (
-                            Intent.FLAG_GRANT_READ_URI_PERMISSION
-                                    | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                    );
-
-            getContentResolver().takePersistableUriPermission(
-                    treeUri,
-                    flags
+            getWindow().getDecorView().setSystemUiVisibility(
+                    android.view.View.SYSTEM_UI_FLAG_FULLSCREEN |
+                    android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                    android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
+                    android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
+                    android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+                    android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
             );
-
-            getSharedPreferences(
-                    PREFS,
-                    MODE_PRIVATE
-            ).edit()
-                    .putString(FOLDER_KEY, treeUri.toString())
-                    .apply();
-
-            scanFolder(treeUri);
 
         } catch (Exception e) {
-
-            Log.e(TAG, "Folder permission error", e);
-
-            notifyError(
-                    "تعذر حفظ صلاحية المجلد. اختره مرة أخرى."
-            );
+            Log.w(TAG, "Could not enable immersive mode", e);
         }
     }
 
-    private void scanFolder(Uri treeUri) {
+    private WebView getWebViewSafe() {
+        try {
+            return getBridge() == null
+                    ? null
+                    : getBridge().getWebView();
 
-        executor.execute(() -> {
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
+    private String cacheKey(String uri) {
+        return CACHE_PREFIX + sha256(uri == null ? "" : uri);
+    }
+
+    private void beginImport(Uri tree) {
+        sendImportStarted(-1);
+
+        importExecutor.execute(() -> {
             try {
+                DocumentFile root =
+                        DocumentFile.fromTreeUri(this, tree);
 
-                File videos = new File(
-                        getFilesDir(),
-                        "shorts-videos"
-                );
+                if (root == null ||
+                        !root.isDirectory() ||
+                        !hasPersistedReadPermission(tree)) {
 
-                File thumbs = new File(
-                        getFilesDir(),
-                        "shorts-thumbnails"
-                );
-
-                videos.mkdirs();
-                thumbs.mkdirs();
-
-                deleteContents(videos);
-                deleteContents(thumbs);
-
-                JSONArray result = new JSONArray();
-
-                collectVideos(
-                        treeUri,
-                        DocumentsContract.getTreeDocumentId(treeUri),
-                        videos,
-                        thumbs,
-                        result
-                );
-
-                if (result.length() == 0) {
-                    notifyError(
-                            "لم يتم العثور على ملفات فيديو معروفة الامتداد."
+                    sendError(
+                            "انتهت صلاحية الوصول إلى المجلد. اختره مرة أخرى."
                     );
                     return;
                 }
 
-                notifyVideos(result);
+                List<DocumentFile> docs = new ArrayList<>();
+
+                collectVideos(root, docs, 0);
+
+                sendImportTotal(docs.size());
+
+                JSONArray output = new JSONArray();
+
+                Map<String, JSONObject> old =
+                        readCachedMap(tree.toString());
+
+                int failedThumbs = 0;
+                int done = 0;
+
+                // إنشاء فهرس خفيف أولاً دون نسخ ملفات الفيديو.
+                for (DocumentFile doc : docs) {
+                    if (destroyed) return;
+
+                    Uri uri = doc.getUri();
+                    String key = uri.toString();
+
+                    String name = doc.getName() == null
+                            ? "فيديو"
+                            : doc.getName();
+
+                    long size = doc.length();
+                    long modified = doc.lastModified();
+
+                    JSONObject item = new JSONObject();
+
+                    item.put("id", key);
+                    item.put("uri", key);
+                    item.put("name", name);
+                    item.put("size", size);
+                    item.put("modified", modified);
+
+                    JSONObject previous = old.get(key);
+
+                    String thumb = null;
+
+                    if (previous != null &&
+                            previous.optLong("size", -1) == size &&
+                            previous.optLong("modified", -1) == modified) {
+
+                        String savedThumb =
+                                previous.optString("thumbnail", "");
+
+                        if (!savedThumb.isEmpty() &&
+                                new File(savedThumb).isFile()) {
+
+                            thumb = savedThumb;
+                        }
+                    }
+
+                    if (thumb != null) {
+                        item.put("thumbnail", thumb);
+                    }
+
+                    output.put(item);
+                }
+
+                saveCache(tree.toString(), output);
+
+                // تجهيز الصور المصغرة واحدة تلو الأخرى.
+                for (int i = 0; i < docs.size(); i++) {
+                    if (destroyed) return;
+
+                    DocumentFile doc = docs.get(i);
+                    JSONObject item = output.optJSONObject(i);
+
+                    if (item == null) {
+                        done++;
+                        continue;
+                    }
+
+                    String id = item.optString("id", "");
+                    String thumb = item.optString("thumbnail", "");
+
+                    if (thumb.isEmpty() ||
+                            !new File(thumb).isFile()) {
+
+                        String generated =
+                                createThumbnail(doc.getUri(), id);
+
+                        if (generated != null) {
+                            item.put("thumbnail", generated);
+                            sendThumbnailReady(id, generated);
+
+                        } else {
+                            failedThumbs++;
+                        }
+                    }
+
+                    done++;
+
+                    saveCache(tree.toString(), output);
+
+                    sendVideoImported(
+                            item,
+                            done,
+                            docs.size()
+                    );
+                }
+
+                sendImportFinished(
+                        docs.size(),
+                        failedThumbs
+                );
 
             } catch (Exception e) {
+                Log.e(TAG, "Folder import failed", e);
 
-                Log.e(TAG, "Folder scan failed", e);
-
-                notifyError(
-                        "حدث خطأ أثناء قراءة الفيديوهات: " +
-                                (
-                                        e.getMessage() == null
-                                                ? "غير معروف"
-                                                : e.getMessage()
-                                )
+                sendError(
+                        "حدث خطأ أثناء فهرسة المجلد: " +
+                        safeMessage(e)
                 );
             }
         });
     }
 
     private void collectVideos(
-            Uri treeUri,
-            String parentId,
-            File videoDir,
-            File thumbDir,
-            JSONArray result
-    ) throws Exception {
-
-        Uri children =
-                DocumentsContract.buildChildDocumentsUriUsingTree(
-                        treeUri,
-                        parentId
-                );
-
-        String[] projection = {
-                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                DocumentsContract.Document.COLUMN_MIME_TYPE
-        };
-
-        List<String[]> docs = new ArrayList<>();
-
-        try (Cursor cursor = getContentResolver().query(
-                children,
-                projection,
-                null,
-                null,
-                null
-        )) {
-
-            if (cursor == null) {
-                return;
-            }
-
-            int id = cursor.getColumnIndexOrThrow(
-                    DocumentsContract.Document.COLUMN_DOCUMENT_ID
-            );
-
-            int name = cursor.getColumnIndexOrThrow(
-                    DocumentsContract.Document.COLUMN_DISPLAY_NAME
-            );
-
-            int mime = cursor.getColumnIndexOrThrow(
-                    DocumentsContract.Document.COLUMN_MIME_TYPE
-            );
-
-            while (cursor.moveToNext()) {
-
-                docs.add(new String[]{
-                        cursor.getString(id),
-                        cursor.getString(name),
-                        cursor.getString(mime)
-                });
-            }
-        }
-
-        for (String[] doc : docs) {
-
-            String id = doc[0];
-
-            String name = doc[1] == null
-                    ? "video.mp4"
-                    : doc[1];
-
-            String mime = doc[2] == null
-                    ? ""
-                    : doc[2];
-
-            if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
-
-                collectVideos(
-                        treeUri,
-                        id,
-                        videoDir,
-                        thumbDir,
-                        result
-                );
-
-            } else if (isSupportedVideo(name, mime)) {
-
-                copyVideo(
-                        treeUri,
-                        id,
-                        name,
-                        videoDir,
-                        thumbDir,
-                        result
-                );
-            }
-        }
-    }
-
-    private boolean isSupportedVideo(String name, String mime) {
-
-        String lower = name.toLowerCase(Locale.ROOT);
-
-        String[] extensions = {
-                ".mp4",
-                ".m4v",
-                ".3gp",
-                ".3g2",
-                ".webm",
-                ".mov",
-                ".mkv",
-                ".avi",
-                ".mpg",
-                ".mpeg",
-                ".mpe",
-                ".ts",
-                ".m2ts",
-                ".mts",
-                ".flv",
-                ".wmv",
-                ".asf",
-                ".ogv",
-                ".vob",
-                ".mpg4"
-        };
-
-        for (String ext : extensions) {
-
-            if (lower.endsWith(ext)) {
-                return true;
-            }
-        }
-
-        return mime != null &&
-                mime.toLowerCase(Locale.ROOT).startsWith("video/");
-    }
-
-    private void copyVideo(
-            Uri treeUri,
-            String documentId,
-            String originalName,
-            File videoDir,
-            File thumbDir,
-            JSONArray result
+            DocumentFile folder,
+            List<DocumentFile> out,
+            int depth
     ) {
+        if (depth > 12) return;
 
-        Uri source =
-                DocumentsContract.buildDocumentUriUsingTree(
-                        treeUri,
-                        documentId
-                );
-
-        String extension = ".video";
-
-        int dot = originalName.lastIndexOf('.');
-
-        if (dot >= 0) {
-            extension = originalName
-                    .substring(dot)
-                    .toLowerCase(Locale.ROOT);
-        }
-
-        File target = new File(
-                videoDir,
-                UUID.randomUUID() + extension
-        );
-
-        try (
-                InputStream in = getContentResolver().openInputStream(source);
-                FileOutputStream out = new FileOutputStream(target)
-        ) {
-
-            if (in == null) {
-                return;
-            }
-
-            byte[] buffer = new byte[128 * 1024];
-
-            int n;
-
-            while ((n = in.read(buffer)) != -1) {
-                out.write(buffer, 0, n);
-            }
-
-            out.flush();
-
-            if (target.length() <= 0) {
-                target.delete();
-                return;
-            }
-
-            String thumb = createThumbnail(
-                    target,
-                    thumbDir
-            );
-
-            JSONObject item = new JSONObject();
-
-            item.put("name", originalName);
-            item.put("path", target.getAbsolutePath());
-            item.put("size", target.length());
-
-            if (thumb != null) {
-                item.put("thumbnail", thumb);
-            }
-
-            result.put(item);
-
-        } catch (Exception e) {
-
-            Log.e(TAG, "Copy failed: " + originalName, e);
-
-            target.delete();
-        }
-    }
-
-    private String createThumbnail(File video, File thumbDir) {
-
-        MediaMetadataRetriever retriever =
-                new MediaMetadataRetriever();
-
-        Bitmap bitmap = null;
+        DocumentFile[] children;
 
         try {
-
-            retriever.setDataSource(video.getAbsolutePath());
-
-            bitmap = retriever.getFrameAtTime(
-                    1_000_000L,
-                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-            );
-
-            if (bitmap == null) {
-                bitmap = retriever.getFrameAtTime();
-            }
-
-            if (bitmap == null) {
-                return null;
-            }
-
-            File thumb = new File(
-                    thumbDir,
-                    UUID.randomUUID() + ".jpg"
-            );
-
-            try (FileOutputStream out = new FileOutputStream(thumb)) {
-
-                bitmap.compress(
-                        Bitmap.CompressFormat.JPEG,
-                        82,
-                        out
-                );
-
-                out.flush();
-            }
-
-            return thumb.getAbsolutePath();
+            children = folder.listFiles();
 
         } catch (Exception e) {
-
-            Log.w(
-                    TAG,
-                    "Thumbnail unavailable: " + video.getName(),
-                    e
-            );
-
-            return null;
-
-        } finally {
-
-            if (bitmap != null) {
-                bitmap.recycle();
-            }
-
-            try {
-                retriever.release();
-            } catch (Exception ignored) {
-            }
-        }
-    }
-
-    private void deleteContents(File dir) {
-
-        File[] files = dir.listFiles();
-
-        if (files == null) {
+            Log.w(TAG, "Folder listing failed", e);
             return;
         }
 
-        for (File file : files) {
+        for (DocumentFile child : children) {
+            if (child == null) continue;
 
-            if (file.isDirectory()) {
-                deleteContents(file);
+            try {
+                if (child.isDirectory()) {
+                    collectVideos(child, out, depth + 1);
+
+                } else if (child.isFile() &&
+                        isVideo(child.getName(), child.getType())) {
+
+                    out.add(child);
+                }
+
+            } catch (Exception e) {
+                Log.w(TAG, "Skipping unreadable item", e);
             }
-
-            file.delete();
         }
     }
 
-    private void notifyVideos(JSONArray videos) {
+    private boolean isVideo(String name, String mime) {
+        if (mime != null &&
+                mime.toLowerCase(Locale.ROOT).startsWith("video/")) {
+            return true;
+        }
 
-        runOnUiThread(() -> {
+        if (name == null) return false;
 
-            try {
+        String n = name.toLowerCase(Locale.ROOT);
 
-                WebView webView = getBridge().getWebView();
+        String[] extensions = {
+                ".mp4", ".m4v", ".3gp", ".webm",
+                ".mkv", ".mov", ".avi", ".mpeg",
+                ".mpg", ".ts", ".m2ts", ".wmv",
+                ".flv", ".ogv", ".vob"
+        };
 
-                webView.evaluateJavascript(
-                        "window.onFolderSelected(" + videos + ");",
-                        null
+        for (String ext : extensions) {
+            if (n.endsWith(ext)) return true;
+        }
+
+        return false;
+    }
+
+    private String createThumbnail(Uri uri, String id) {
+        MediaMetadataRetriever retriever =
+                new MediaMetadataRetriever();
+
+        Bitmap frame = null;
+
+        try {
+            retriever.setDataSource(this, uri);
+
+            frame = retriever.getFrameAtTime(
+                    1_000_000,
+                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+            );
+
+            if (frame == null) {
+                frame = retriever.getFrameAtTime();
+            }
+
+            if (frame == null) return null;
+
+            int max = 720;
+            int width = frame.getWidth();
+            int height = frame.getHeight();
+
+            float scale = Math.min(
+                    1f,
+                    max / (float) Math.max(width, height)
+            );
+
+            Bitmap scaled = frame;
+
+            if (scale < 1f) {
+                scaled = Bitmap.createScaledBitmap(
+                        frame,
+                        Math.max(1, (int) (width * scale)),
+                        Math.max(1, (int) (height * scale)),
+                        true
                 );
 
-            } catch (Exception e) {
+                if (scaled != frame) {
+                    frame.recycle();
+                }
+            }
 
-                Log.e(TAG, "Send videos failed", e);
+            File dir = new File(
+                    getFilesDir(),
+                    "shorts-thumbnails"
+            );
+
+            if (!dir.exists() && !dir.mkdirs()) {
+                return null;
+            }
+
+            File target = new File(
+                    dir,
+                    sha256(id) + ".jpg"
+            );
+
+            try (FileOutputStream stream =
+                         new FileOutputStream(target)) {
+
+                if (!scaled.compress(
+                        Bitmap.CompressFormat.JPEG,
+                        78,
+                        stream
+                )) {
+                    return null;
+                }
+
+                stream.flush();
+            }
+
+            if (!scaled.isRecycled()) {
+                scaled.recycle();
+            }
+
+            return target.getAbsolutePath();
+
+        } catch (Exception e) {
+            Log.w(TAG, "Thumbnail unavailable for " + uri, e);
+            return null;
+
+        } finally {
+            try {
+                retriever.release();
+            } catch (Exception ignored) {}
+
+            if (frame != null && !frame.isRecycled()) {
+                frame.recycle();
+            }
+        }
+    }
+
+    private Map<String, JSONObject> readCachedMap(String folder) {
+        Map<String, JSONObject> map = new HashMap<>();
+
+        try {
+            String raw = getSharedPreferences(PREFS, MODE_PRIVATE)
+                    .getString(cacheKey(folder), "[]");
+
+            JSONArray array = new JSONArray(raw);
+
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject item = array.optJSONObject(i);
+
+                if (item != null) {
+                    map.put(item.optString("id", ""), item);
+                }
+            }
+
+        } catch (Exception e) {
+            Log.w(TAG, "Cache read failed", e);
+        }
+
+        return map;
+    }
+
+    private void saveCache(String folder, JSONArray array) {
+        getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .putString(cacheKey(folder), array.toString())
+                .apply();
+    }
+
+    private boolean hasPersistedReadPermission(Uri uri) {
+        try {
+            for (android.content.UriPermission permission :
+                    getContentResolver().getPersistedUriPermissions()) {
+
+                if (permission.getUri().equals(uri) &&
+                        permission.isReadPermission()) {
+                    return true;
+                }
+            }
+
+        } catch (Exception e) {
+            Log.w(TAG, "Permission check failed", e);
+        }
+
+        return false;
+    }
+
+    private String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(
+                            value.getBytes(
+                                    java.nio.charset.StandardCharsets.UTF_8
+                            )
+                    );
+
+            StringBuilder out = new StringBuilder();
+
+            for (byte b : digest) {
+                out.append(
+                        String.format(Locale.US, "%02x", b)
+                );
+            }
+
+            return out.toString();
+
+        } catch (Exception e) {
+            return Integer.toHexString(value.hashCode());
+        }
+    }
+
+    private String safeMessage(Exception e) {
+        return e.getMessage() == null
+                ? "خطأ غير معروف"
+                : e.getMessage();
+    }
+
+    private void callJs(String script) {
+        runOnUiThread(() -> {
+            WebView web = getWebViewSafe();
+
+            if (!destroyed && web != null) {
+                web.evaluateJavascript(script, null);
             }
         });
     }
 
-    private void notifyError(String message) {
+    private void sendImportStarted(int total) {
+        callJs(
+                "window.onImportStarted && window.onImportStarted(" +
+                        total + ");"
+        );
+    }
 
-        runOnUiThread(() -> {
+    private void sendImportTotal(int total) {
+        callJs(
+                "window.onImportTotal && window.onImportTotal(" +
+                        total + ");"
+        );
+    }
+
+    private void sendCachedVideos(JSONArray list) {
+        callJs(
+                "window.onCachedVideos && window.onCachedVideos(" +
+                        list.toString() + ");"
+        );
+    }
+
+    private void sendVideoImported(
+            JSONObject item,
+            int done,
+            int total
+    ) {
+        callJs(
+                "window.onVideoImported && window.onVideoImported(" +
+                        item.toString() + "," +
+                        done + "," +
+                        total + ");"
+        );
+    }
+
+    private void sendThumbnailReady(String id, String path) {
+        callJs(
+                "window.onVideoThumbnailReady && window.onVideoThumbnailReady(" +
+                        JSONObject.quote(id) + "," +
+                        JSONObject.quote(path) + ");"
+        );
+    }
+
+    private void sendImportFinished(int total, int failed) {
+        callJs(
+                "window.onImportFinished && window.onImportFinished(" +
+                        total + "," +
+                        failed + ");"
+        );
+    }
+
+    private void sendError(String message) {
+        callJs(
+                "window.onFolderError && window.onFolderError(" +
+                        JSONObject.quote(message) + ");"
+        );
+    }
+
+    public class WebBridge {
+
+        @JavascriptInterface
+        public void selectFolder() {
+            runOnUiThread(() -> {
+                try {
+                    Intent intent =
+                            new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+
+                    intent.addFlags(
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
+                            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                    );
+
+                    folderPicker.launch(intent);
+
+                } catch (Exception e) {
+                    Log.e(TAG, "Folder picker failed", e);
+                    sendError("تعذر فتح نافذة اختيار المجلد.");
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void checkSavedFolder() {
+            SharedPreferences prefs =
+                    getSharedPreferences(PREFS, MODE_PRIVATE);
+
+            String saved = prefs.getString(FOLDER_KEY, "");
+
+            // محاولة استعادة المجلد المحفوظ في الإصدارات السابقة.
+            if (saved.isEmpty()) {
+                saved = getSharedPreferences(
+                        "ShortsSettings",
+                        MODE_PRIVATE
+                ).getString("saved_folder", "");
+
+                if (saved.isEmpty()) {
+                    saved = getSharedPreferences(
+                            "ShortsPrefs",
+                            MODE_PRIVATE
+                    ).getString("savedFolderUri", "");
+                }
+
+                if (!saved.isEmpty()) {
+                    prefs.edit()
+                            .putString(FOLDER_KEY, saved)
+                            .apply();
+                }
+            }
+
+            if (saved.isEmpty()) return;
 
             try {
+                Uri uri = Uri.parse(saved);
 
-                WebView webView = getBridge().getWebView();
+                if (!hasPersistedReadPermission(uri)) {
+                    sendError(
+                            "صلاحية المجلد غير محفوظة. اختر المجلد مرة واحدة مجدداً."
+                    );
+                    return;
+                }
 
-                webView.evaluateJavascript(
-                        "window.onFolderError(" +
-                                JSONObject.quote(message) +
-                                ");",
-                        null
+                String raw = prefs.getString(
+                        cacheKey(saved),
+                        "[]"
                 );
 
-            } catch (Exception e) {
+                JSONArray cached = new JSONArray(raw);
 
-                Log.e(TAG, "Send error failed", e);
+                if (cached.length() > 0) {
+                    sendCachedVideos(cached);
+                }
+
+                beginImport(uri);
+
+            } catch (Exception e) {
+                Log.e(TAG, "Saved folder restore failed", e);
+
+                sendError(
+                        "تعذر استعادة المجلد المحفوظ. اختره مرة أخرى."
+                );
             }
-        });
+        }
+
+        @JavascriptInterface
+        public void openPlayer(String videosJson, int startIndex) {
+            runOnUiThread(() -> {
+                try {
+                    Intent intent = new Intent(
+                            MainActivity.this,
+                            PlayerActivity.class
+                    );
+
+                    intent.putExtra(
+                            PlayerActivity.EXTRA_VIDEOS,
+                            videosJson
+                    );
+
+                    intent.putExtra(
+                            PlayerActivity.EXTRA_START_INDEX,
+                            startIndex
+                    );
+
+                    playerLauncher.launch(intent);
+
+                } catch (Exception e) {
+                    Log.e(TAG, "Player launch failed", e);
+                    sendError("تعذر تشغيل الفيديو.");
+                }
+            });
+        }
     }
 
     @Override
     public void onDestroy() {
-
-        executor.shutdown();
-
+        destroyed = true;
+        importExecutor.shutdownNow();
         super.onDestroy();
     }
 }
