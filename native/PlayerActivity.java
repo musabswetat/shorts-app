@@ -1,83 +1,148 @@
 package com.shorts.app.v2;
 
 import android.app.Activity;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
-import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.View;
 import android.view.WindowManager;
+import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.TextView;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
-import androidx.annotation.Nullable;
-import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.media3.common.MediaItem;
-import androidx.media3.common.PlaybackException;
-import androidx.media3.common.Player;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.ui.AspectRatioFrameLayout;
 import androidx.media3.ui.PlayerView;
 
-import java.io.File;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
 
 public class PlayerActivity extends Activity {
 
-    public static final String EXTRA_PATHS = "video_paths";
-    public static final String EXTRA_NAMES = "video_names";
-    public static final String EXTRA_INDEX = "start_index";
+    public static final String EXTRA_VIDEOS = "videos_json";
+    public static final String EXTRA_START_INDEX = "start_index";
 
     private ExoPlayer player;
     private PlayerView playerView;
 
-    private TextView titleView;
-    private TextView counterView;
+    private final List<String> videoUris = new ArrayList<>();
+    private final List<Integer> cycle = new ArrayList<>();
+    private final List<Integer> history = new ArrayList<>();
 
-    private ArrayList<String> paths;
-    private ArrayList<String> names;
+    private int cyclePosition = 0;
+    private int currentIndex = -1;
 
-    private int currentIndex;
+    private float downX;
+    private float downY;
 
     @Override
-    protected void onCreate(@Nullable Bundle savedInstanceState) {
-
-        super.onCreate(savedInstanceState);
-
-        applyImmersiveMode();
+    protected void onCreate(Bundle state) {
+        super.onCreate(state);
 
         getWindow().addFlags(
                 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         );
 
-        paths = getIntent().getStringArrayListExtra(EXTRA_PATHS);
-        names = getIntent().getStringArrayListExtra(EXTRA_NAMES);
+        enterImmersiveMode();
+        readVideos();
 
-        currentIndex = getIntent().getIntExtra(
-                EXTRA_INDEX,
-                0
-        );
-
-        if (paths == null || paths.isEmpty()) {
+        if (videoUris.isEmpty()) {
             finish();
             return;
         }
 
-        if (names == null) {
-            names = new ArrayList<>();
+        buildLayout();
+
+        player = new ExoPlayer.Builder(this).build();
+
+        playerView.setPlayer(player);
+        playerView.setUseController(false);
+        playerView.setResizeMode(
+                AspectRatioFrameLayout.RESIZE_MODE_FIT
+        );
+
+        player.addListener(new androidx.media3.common.Player.Listener() {
+
+            @Override
+            public void onPlaybackStateChanged(int playbackState) {
+                if (playbackState ==
+                        androidx.media3.common.Player.STATE_ENDED) {
+                    playNextRandom();
+                }
+            }
+
+            @Override
+            public void onPlayerError(
+                    androidx.media3.common.PlaybackException error
+            ) {
+                Toast.makeText(
+                        PlayerActivity.this,
+                        "تعذر تشغيل هذا المقطع، سيتم الانتقال للمقطع التالي",
+                        Toast.LENGTH_SHORT
+                ).show();
+
+                playerView.postDelayed(
+                        () -> playNextRandom(),
+                        500
+                );
+            }
+        });
+
+        int start = Math.max(
+                0,
+                Math.min(
+                        getIntent().getIntExtra(EXTRA_START_INDEX, 0),
+                        videoUris.size() - 1
+                )
+        );
+
+        buildCycle(start);
+        playIndex(start);
+    }
+
+    private void readVideos() {
+        try {
+            JSONArray array = new JSONArray(
+                    getIntent().getStringExtra(EXTRA_VIDEOS)
+            );
+
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject item = array.optJSONObject(i);
+
+                if (item == null) continue;
+
+                String uri = item.optString("uri", "");
+
+                if (uri.isEmpty()) {
+                    uri = item.optString("path", "");
+                }
+
+                if (!uri.isEmpty()) {
+                    videoUris.add(uri);
+                }
+            }
+
+        } catch (Exception e) {
+            videoUris.clear();
         }
+    }
 
+    private void buildLayout() {
         FrameLayout root = new FrameLayout(this);
-
-        root.setBackgroundColor(0xFF000000);
+        root.setBackgroundColor(Color.BLACK);
 
         playerView = new PlayerView(this);
-
+        playerView.setBackgroundColor(Color.BLACK);
         playerView.setUseController(false);
-
         playerView.setResizeMode(
                 AspectRatioFrameLayout.RESIZE_MODE_FIT
         );
@@ -87,266 +152,302 @@ public class PlayerActivity extends Activity {
                 new FrameLayout.LayoutParams(-1, -1)
         );
 
-        TextView back = new TextView(this);
+        // زر إغلاق المشغل.
+        Button close = new Button(this);
 
-        back.setText("‹  المكتبة");
-        back.setTextColor(0xFFFFFFFF);
-        back.setTextSize(14);
-        back.setGravity(Gravity.CENTER);
-        back.setPadding(22, 12, 22, 12);
-        back.setBackground(pill());
+        close.setText("✕");
+        close.setTextColor(Color.WHITE);
+        close.setTextSize(18);
+        close.setBackgroundColor(Color.TRANSPARENT);
 
-        FrameLayout.LayoutParams backParams =
+        FrameLayout.LayoutParams closeLp =
                 new FrameLayout.LayoutParams(
-                        -2,
-                        -2,
-                        Gravity.TOP | Gravity.START
+                        dp(52),
+                        dp(52),
+                        Gravity.TOP | Gravity.RIGHT
                 );
 
-        backParams.setMargins(18, 35, 0, 0);
+        closeLp.setMargins(
+                0,
+                dp(22),
+                dp(10),
+                0
+        );
 
-        root.addView(back, backParams);
+        root.addView(close, closeLp);
+        close.setOnClickListener(v -> finish());
 
-        back.setOnClickListener(v -> finish());
+        // القائمة السفلية داخل المشغل.
+        LinearLayout nav = new LinearLayout(this);
 
-        titleView = new TextView(this);
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        nav.setGravity(Gravity.CENTER);
+        nav.setBackgroundColor(0xCC151B2A);
 
-        titleView.setTextColor(0xFFFFFFFF);
-        titleView.setTextSize(14);
-        titleView.setMaxLines(2);
-        titleView.setShadowLayer(8, 0, 2, 0xCC000000);
+        String[] labels = {
+                "⌂\nالرئيسية",
+                "⤨\nعشوائي",
+                "↻\nتحديث"
+        };
 
-        FrameLayout.LayoutParams titleParams =
+        for (int i = 0; i < labels.length; i++) {
+            final int action = i;
+
+            Button button = new Button(this);
+
+            button.setText(labels[i]);
+            button.setAllCaps(false);
+            button.setTextColor(0xFFE5E3FF);
+            button.setTextSize(12);
+            button.setBackgroundColor(Color.TRANSPARENT);
+
+            nav.addView(
+                    button,
+                    new LinearLayout.LayoutParams(
+                            0,
+                            dp(64),
+                            1
+                    )
+            );
+
+            button.setOnClickListener(v -> {
+                if (action == 0) {
+                    finish();
+
+                } else if (action == 1) {
+                    reshuffle();
+
+                } else {
+                    setResult(Activity.RESULT_FIRST_USER);
+                    finish();
+                }
+            });
+        }
+
+        FrameLayout.LayoutParams navLp =
                 new FrameLayout.LayoutParams(
                         -1,
-                        -2,
+                        dp(70),
                         Gravity.BOTTOM
                 );
 
-        titleParams.setMargins(20, 0, 20, 42);
+        root.addView(nav, navLp);
 
-        root.addView(titleView, titleParams);
+        // السحب للأعلى أو الأسفل للتنقل بين المقاطع.
+        playerView.setOnTouchListener((view, event) -> {
 
-        counterView = new TextView(this);
+            switch (event.getActionMasked()) {
 
-        counterView.setTextColor(0xCCFFFFFF);
-        counterView.setTextSize(12);
+                case MotionEvent.ACTION_DOWN:
+                    downX = event.getX();
+                    downY = event.getY();
+                    return true;
 
-        FrameLayout.LayoutParams counterParams =
-                new FrameLayout.LayoutParams(
-                        -2,
-                        -2,
-                        Gravity.BOTTOM | Gravity.END
-                );
+                case MotionEvent.ACTION_UP:
 
-        counterParams.setMargins(0, 0, 20, 16);
+                    float dx = event.getX() - downX;
+                    float dy = event.getY() - downY;
 
-        root.addView(counterView, counterParams);
+                    if (Math.abs(dy) > dp(55) &&
+                            Math.abs(dy) > Math.abs(dx)) {
 
-        setContentView(root);
+                        if (dy < 0) {
+                            playNextRandom();
+                        } else {
+                            playPrevious();
+                        }
 
-        player = new ExoPlayer.Builder(this).build();
+                    } else if (Math.abs(dx) < dp(24) &&
+                            Math.abs(dy) < dp(24)) {
 
-        playerView.setPlayer(player);
+                        if (player != null) {
+                            if (player.isPlaying()) {
+                                player.pause();
+                            } else {
+                                player.play();
+                            }
+                        }
+                    }
 
-        player.addListener(new Player.Listener() {
-
-            @Override
-            public void onPlayerError(PlaybackException error) {
-
-                Toast.makeText(
-                        PlayerActivity.this,
-                        "تعذر تشغيل الفيديو. قد لا يدعم الهاتف ترميزه.",
-                        Toast.LENGTH_LONG
-                ).show();
+                    return true;
             }
 
-            @Override
-            public void onPlaybackStateChanged(int state) {
-
-                if (state == Player.STATE_ENDED &&
-                        currentIndex < paths.size() - 1) {
-
-                    playIndex(currentIndex + 1);
-                }
-            }
+            return true;
         });
 
-        GestureDetector detector = new GestureDetector(
-                this,
-                new GestureDetector.SimpleOnGestureListener() {
-
-                    @Override
-                    public boolean onDown(MotionEvent event) {
-                        return true;
-                    }
-
-                    @Override
-                    public boolean onSingleTapUp(MotionEvent event) {
-
-                        if (player.isPlaying()) {
-                            player.pause();
-                        } else {
-                            player.play();
-                        }
-
-                        return true;
-                    }
-
-                    @Override
-                    public boolean onFling(
-                            MotionEvent first,
-                            MotionEvent second,
-                            float velocityX,
-                            float velocityY
-                    ) {
-
-                        float dy = second.getY() - first.getY();
-
-                        float dx = second.getX() - first.getX();
-
-                        if (Math.abs(dy) > Math.abs(dx) &&
-                                Math.abs(dy) > 85 &&
-                                Math.abs(velocityY) > 100) {
-
-                            if (dy < 0) {
-
-                                playIndex(
-                                        Math.min(
-                                                currentIndex + 1,
-                                                paths.size() - 1
-                                        )
-                                );
-
-                            } else {
-
-                                playIndex(
-                                        Math.max(
-                                                currentIndex - 1,
-                                                0
-                                        )
-                                );
-                            }
-
-                            return true;
-                        }
-
-                        return false;
-                    }
-                }
-        );
-
-        playerView.setOnTouchListener(
-                (view, event) -> detector.onTouchEvent(event)
-        );
-
-        playIndex(
-                Math.max(
-                        0,
-                        Math.min(currentIndex, paths.size() - 1)
-                )
-        );
+        setContentView(root);
     }
 
-    private android.graphics.drawable.Drawable pill() {
+    private void buildCycle(int firstIndex) {
+        cycle.clear();
 
-        android.graphics.drawable.GradientDrawable drawable =
-                new android.graphics.drawable.GradientDrawable();
-
-        drawable.setColor(0x99090B12);
-        drawable.setCornerRadius(60);
-        drawable.setStroke(1, 0x66FFFFFF);
-
-        return drawable;
-    }
-
-    private void applyImmersiveMode() {
-
-        WindowCompat.setDecorFitsSystemWindows(
-                getWindow(),
-                false
-        );
-
-        WindowInsetsControllerCompat controller =
-                new WindowInsetsControllerCompat(
-                        getWindow(),
-                        getWindow().getDecorView()
-                );
-
-        controller.hide(
-                WindowInsetsCompat.Type.systemBars()
-        );
-
-        controller.setSystemBarsBehavior(
-                WindowInsetsControllerCompat
-                        .BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        );
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean focus) {
-
-        super.onWindowFocusChanged(focus);
-
-        if (focus) {
-            applyImmersiveMode();
+        for (int i = 0; i < videoUris.size(); i++) {
+            if (i != firstIndex) {
+                cycle.add(i);
+            }
         }
+
+        Collections.shuffle(
+                cycle,
+                new Random(System.nanoTime())
+        );
+
+        cycle.add(0, firstIndex);
+        cyclePosition = 0;
     }
 
     private void playIndex(int index) {
-
         if (player == null ||
-                paths == null ||
-                paths.isEmpty()) {
+                index < 0 ||
+                index >= videoUris.size()) {
             return;
         }
 
         currentIndex = index;
+        history.add(index);
 
-        File file = new File(paths.get(index));
+        try {
+            player.setMediaItem(
+                    MediaItem.fromUri(
+                            Uri.parse(videoUris.get(index))
+                    )
+            );
 
-        if (!file.exists()) {
+            player.prepare();
+            player.play();
 
+        } catch (Exception e) {
             Toast.makeText(
                     this,
-                    "ملف الفيديو غير موجود.",
+                    "صيغة هذا الفيديو أو مصدره غير مدعوم",
                     Toast.LENGTH_SHORT
             ).show();
 
+            playNextRandom();
+        }
+    }
+
+    private void playNextRandom() {
+
+        if (videoUris.size() <= 1) {
+            if (player != null) {
+                player.seekTo(0);
+                player.play();
+            }
             return;
         }
 
-        titleView.setText(
-                index < names.size()
-                        ? names.get(index)
-                        : file.getName()
+        if (cyclePosition + 1 >= cycle.size()) {
+
+            int previous = currentIndex;
+
+            cycle.clear();
+
+            for (int i = 0; i < videoUris.size(); i++) {
+                cycle.add(i);
+            }
+
+            Collections.shuffle(
+                    cycle,
+                    new Random(System.nanoTime())
+            );
+
+            // تجنب تكرار آخر فيديو مباشرة.
+            if (cycle.get(0) == previous &&
+                    cycle.size() > 1) {
+                Collections.swap(cycle, 0, 1);
+            }
+
+            cyclePosition = -1;
+        }
+
+        cyclePosition++;
+
+        playIndex(
+                cycle.get(cyclePosition)
+        );
+    }
+
+    private void playPrevious() {
+        if (history.size() < 2) return;
+
+        history.remove(history.size() - 1);
+
+        int previous = history.remove(
+                history.size() - 1
         );
 
-        counterView.setText(
-                (index + 1) + " / " + paths.size()
+        cyclePosition = cycle.indexOf(previous);
+
+        playIndex(previous);
+    }
+
+    private void reshuffle() {
+        if (videoUris.size() < 2) return;
+
+        int previous = currentIndex;
+
+        cycle.clear();
+
+        for (int i = 0; i < videoUris.size(); i++) {
+            if (i != previous) {
+                cycle.add(i);
+            }
+        }
+
+        Collections.shuffle(
+                cycle,
+                new Random(System.nanoTime())
         );
 
-        player.setMediaItem(
-                MediaItem.fromUri(Uri.fromFile(file))
-        );
+        cycle.add(0, previous);
+        cyclePosition = 0;
 
-        player.prepare();
-        player.play();
+        playNextRandom();
+    }
+
+    private int dp(int value) {
+        return (int) (
+                value *
+                getResources().getDisplayMetrics().density +
+                0.5f
+        );
+    }
+
+    private void enterImmersiveMode() {
+        getWindow().getDecorView().setSystemUiVisibility(
+
+                View.SYSTEM_UI_FLAG_FULLSCREEN |
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        );
     }
 
     @Override
-    protected void onStop() {
+    protected void onResume() {
+        super.onResume();
 
-        super.onStop();
+        enterImmersiveMode();
 
+        if (player != null) {
+            player.play();
+        }
+    }
+
+    @Override
+    protected void onPause() {
         if (player != null) {
             player.pause();
         }
+
+        super.onPause();
     }
 
     @Override
     protected void onDestroy() {
-
         if (player != null) {
             player.release();
             player = null;
