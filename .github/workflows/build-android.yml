@@ -1,9 +1,10 @@
+
 name: Build Shorts Android APK
 
 on:
   push:
-    branches: [main, master]
-
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -11,130 +12,161 @@ permissions:
 
 jobs:
   build:
+    name: Build debug APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Prepare Capacitor Android project
-        shell: bash
+      - name: Install Android SDK 35
         run: |
-          set -euo pipefail
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-          test -f index.html
-          test -f native/MainActivity.java
-          test -f native/PlayerActivity.java
+      - name: Install project dependencies
+        run: |
+          npm install
+          npm install @capacitor/core@6 @capacitor/android@6 @capacitor/cli@6
 
-          mkdir -p public
-          cp index.html public/index.html
-
-          if [ ! -f package.json ]; then
-            npm init -y
-          fi
-
-          npm install @capacitor/core@^6 @capacitor/android@^6
-          npm install --save-dev @capacitor/cli@^6
-
-          cat > capacitor.config.json <<'JSON'
-          {
-            "appId": "com.shorts.app.v2",
-            "appName": "Shorts App",
-            "webDir": "public"
-          }
-          JSON
-
+      - name: Prepare Android project
+        run: |
           if [ ! -d android ]; then
             npx cap add android
           fi
 
-          npx cap sync android
-
-      - name: Install native player and persistent library code
-        shell: bash
+      - name: Update Android build versions
         run: |
-          set -euo pipefail
-
-          python3 - <<'PY'
+          python3 <<'PY'
           from pathlib import Path
           import re
 
-          gradle = Path('android/app/build.gradle')
-          src = gradle.read_text(encoding='utf-8')
+          root = Path("android")
 
-          deps = [
-            'implementation "androidx.documentfile:documentfile:1.0.1"',
-            'implementation "androidx.media3:media3-exoplayer:1.5.1"',
-            'implementation "androidx.media3:media3-ui:1.5.1"'
+          # Update Android Gradle Plugin
+          gradle_file = root / "build.gradle"
+          if gradle_file.exists():
+              content = gradle_file.read_text()
+              content = content.replace("8.2.1", "8.6.1")
+              gradle_file.write_text(content)
+
+          # Update Gradle wrapper
+          wrapper = root / "gradle/wrapper/gradle-wrapper.properties"
+          if wrapper.exists():
+              content = wrapper.read_text()
+              content = content.replace(
+                  "gradle-8.2.1-all.zip",
+                  "gradle-8.7-all.zip"
+              )
+              content = content.replace(
+                  "gradle-8.2.1-bin.zip",
+                  "gradle-8.7-bin.zip"
+              )
+              wrapper.write_text(content)
+
+          # Update compile SDK to 35
+          files = [
+              root / "variables.gradle",
+              root / "app/build.gradle"
           ]
 
-          for dep in deps:
-            artifact = dep.split(':')[1]
+          for file in files:
+              if not file.exists():
+                  continue
 
-            if artifact not in src:
-              match = re.search(r'dependencies\s*\{', src)
+              content = file.read_text()
+              content = re.sub(
+                  r"(compileSdkVersion\s*[= ]\s*)34\b",
+                  r"\g<1>35",
+                  content
+              )
+              content = re.sub(
+                  r"(compileSdk\s*[= ]\s*)34\b",
+                  r"\g<1>35",
+                  content
+              )
+              file.write_text(content)
 
-              if not match:
-                raise SystemExit(
-                  'Could not find dependencies block in app/build.gradle'
-                )
+          print("Android build versions updated.")
+          PY
 
-              pos = match.end()
-              src = src[:pos] + '\n    ' + dep + src[pos:]
+      - name: Sync Capacitor
+        run: npx cap sync android
 
-          gradle.write_text(src, encoding='utf-8')
+      - name: Add Android dependencies
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
 
-          java_dir = Path(
-            'android/app/src/main/java/com/shorts/app/v2'
-          )
+          file = Path("android/app/build.gradle")
+          content = file.read_text()
 
-          java_dir.mkdir(parents=True, exist_ok=True)
+          dependencies = [
+              'implementation "androidx.documentfile:documentfile:1.0.1"',
+              'implementation "androidx.media3:media3-exoplayer:1.5.1"',
+              'implementation "androidx.media3:media3-ui:1.5.1"'
+          ]
 
-          for name in ('MainActivity.java', 'PlayerActivity.java'):
-            (java_dir / name).write_text(
-              Path('native', name).read_text(encoding='utf-8'),
-              encoding='utf-8'
-            )
+          for dependency in dependencies:
+              if dependency not in content:
+                  if "dependencies {" not in content:
+                      raise SystemExit("dependencies block not found")
+                  content = content.replace(
+                      "dependencies {",
+                      "dependencies {\n    " + dependency,
+                      1
+                  )
 
-          manifest = Path(
-            'android/app/src/main/AndroidManifest.xml'
-          )
+          file.write_text(content)
+          PY
 
-          xml = manifest.read_text(encoding='utf-8')
+      - name: Install Shorts Android Java files
+        run: |
+          JAVA_DIR="android/app/src/main/java/com/shorts/app/v2"
+          mkdir -p "$JAVA_DIR"
 
-          activity = (
-            '<activity '
-            'android:name="com.shorts.app.v2.PlayerActivity" '
-            'android:exported="false" '
-            'android:screenOrientation="unspecified" '
-            'android:theme="@android:style/Theme.Material.NoActionBar" />'
-          )
+          cp native/MainActivity.java "$JAVA_DIR/MainActivity.java"
+          cp native/PlayerActivity.java "$JAVA_DIR/PlayerActivity.java"
 
-          if 'com.shorts.app.v2.PlayerActivity' not in xml:
-            xml = xml.replace(
-              '</application>',
-              '        ' + activity + '\n    </application>'
-            )
+      - name: Register PlayerActivity
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
 
-          manifest.write_text(xml, encoding='utf-8')
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          content = manifest.read_text()
+
+          activity = '''
+                  <activity
+                      android:name="com.shorts.app.v2.PlayerActivity"
+                      android:configChanges="orientation|screenSize|keyboardHidden"
+                      android:exported="false"
+                      android:screenOrientation="unspecified" />
+          '''
+
+          if "com.shorts.app.v2.PlayerActivity" not in content:
+              content = content.replace(
+                  "</application>",
+                  activity + "\n    </application>"
+              )
+
+          manifest.write_text(content)
           PY
 
       - name: Build debug APK
-        shell: bash
         run: |
-          set -euo pipefail
-
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
